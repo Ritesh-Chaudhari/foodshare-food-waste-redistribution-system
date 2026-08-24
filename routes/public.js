@@ -6,24 +6,27 @@ const { isGuest } = require('../config/middleware');
 const router = express.Router();
 
 // Serve public HTML pages
+const path = require('path');
+
+// Serve public HTML pages
 router.get('/', (req, res) => {
-    res.sendFile('home.html', { root: 'public/pages' });
+  res.sendFile(path.join(__dirname, '../public/pages/home.html'));
 });
 
 router.get('/about', (req, res) => {
-    res.sendFile('about.html', { root: 'public/pages' });
+  res.sendFile(path.join(__dirname, '../public/pages/about.html'));
 });
 
 router.get('/how-it-works', (req, res) => {
-    res.sendFile('how-it-works.html', { root: 'public/pages' });
+  res.sendFile(path.join(__dirname, '../public/pages/how-it-works.html'));
 });
 
 router.get('/for-donors', (req, res) => {
-    res.sendFile('for-donors.html', { root: 'public/pages' });
+  res.sendFile(path.join(__dirname, '../public/pages/for-donors.html'));
 });
 
 router.get('/for-ngos', (req, res) => {
-    res.sendFile('for-ngos.html', { root: 'public/pages' });
+  res.sendFile(path.join(__dirname, '../public/pages/for-ngos.html'));
 });
 
 // API: Public stats
