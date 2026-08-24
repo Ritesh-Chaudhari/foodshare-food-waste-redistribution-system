@@ -1,15 +1,14 @@
 const Database = require('better-sqlite3');
 const path = require('path');
-
-const dbPath = path.join(__dirname, '..', 'data', 'food_waste.db');
-
-// Ensure data directory exists
 const fs = require('fs');
+const bcrypt = require('bcryptjs'); // Ensure bcryptjs or bcrypt is installed
+
 const dataDir = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
 }
 
+const dbPath = path.join(dataDir, 'food_waste.db');
 const db = new Database(dbPath);
 
 // Enable WAL mode for better performance
@@ -103,5 +102,27 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_donors_city ON donors(city);
     CREATE INDEX IF NOT EXISTS idx_ngos_city ON ngos(city);
 `);
+
+// --- Seed Admin Account ---
+const adminEmail = process.env.ADMIN_EMAIL || 'riteshmc018@gmail.com';
+const adminPassword = process.env.ADMIN_PASSWORD || 'Ritesh@1234';
+const hashedPassword = bcrypt.hashSync(adminPassword, 10);
+
+const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get(adminEmail);
+
+if (!existingAdmin) {
+    db.prepare(`
+        INSERT INTO users (email, password, role, is_active)
+        VALUES (?, ?, 'admin', 1)
+    `).run(adminEmail, hashedPassword);
+    console.log(`[Database] Created Admin: ${adminEmail}`);
+} else {
+    db.prepare(`
+        UPDATE users 
+        SET password = ?, role = 'admin', is_active = 1 
+        WHERE email = ?
+    `).run(hashedPassword, adminEmail);
+    console.log(`[Database] Updated Admin Credentials: ${adminEmail}`);
+}
 
 module.exports = db;
