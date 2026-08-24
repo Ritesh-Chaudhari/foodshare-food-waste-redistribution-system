@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Reports &amp; Overview</h1>
+            <p>System-wide statistics and recent activity</p>
+        </div>
+
+        <h3 class="mb-1">Donors by Type</h3>
+        <div id="donorsByType" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+
+        <h3 class="mb-1 mt-2">Donations by Status</h3>
+        <div id="donationsByStatus" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+
+        <h3 class="mb-1 mt-2">Requests by Status</h3>
+        <div id="requestsByStatus" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+
+        <h3 class="mb-1 mt-2">Recent Donations</h3>
+        <div id="recentDonations" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+
+        <h3 class="mb-1 mt-2">Recent Requests</h3>
+        <div id="recentRequests" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    async function loadReports() {
+        try {
+            const reports = await App.get('/api/admin/reports');
+
+            // Donors by type
+            const dtEl = document.getElementById('donorsByType');
+            if (reports.donorsByType.length === 0) {
+                dtEl.innerHTML = '<div class="empty-state"><p>No donor data available.</p></div>';
+            } else {
+                let html = '<div class="stats-grid">';
+                reports.donorsByType.forEach(d => {
+                    html += `<div class="stat-card"><div class="stat-number">${d.count}</div><div class="stat-label">${d.organization_type}</div></div>`;
+                });
+                html += '</div>';
+                dtEl.innerHTML = html;
+            }
+
+            // Donations by status
+            const dsEl = document.getElementById('donationsByStatus');
+            if (reports.donationsByStatus.length === 0) {
+                dsEl.innerHTML = '<div class="empty-state"><p>No donation data available.</p></div>';
+            } else {
+                let html = '<div class="stats-grid">';
+                reports.donationsByStatus.forEach(d => {
+                    const colors = { AVAILABLE: 'stat-success', REQUESTED: 'stat-warning', CONFIRMED: 'stat-info', COLLECTED: '', COMPLETED: 'stat-success', EXPIRED: 'stat-danger' };
+                    html += `<div class="stat-card ${colors[d.status] || ''}"><div class="stat-number">${d.count}</div><div class="stat-label">${d.status}</div></div>`;
+                });
+                html += '</div>';
+                dsEl.innerHTML = html;
+            }
+
+            // Requests by status
+            const rsEl = document.getElementById('requestsByStatus');
+            if (reports.requestsByStatus.length === 0) {
+                rsEl.innerHTML = '<div class="empty-state"><p>No request data available.</p></div>';
+            } else {
+                let html = '<div class="stats-grid">';
+                reports.requestsByStatus.forEach(r => {
+                    const colors = { PENDING: 'stat-warning', ACCEPTED: 'stat-success', REJECTED: 'stat-danger' };
+                    html += `<div class="stat-card ${colors[r.status] || ''}"><div class="stat-number">${r.count}</div><div class="stat-label">${r.status}</div></div>`;
+                });
+                html += '</div>';
+                rsEl.innerHTML = html;
+            }
+
+            // Recent donations
+            const rdEl = document.getElementById('recentDonations');
+            if (reports.recentDonations.length === 0) {
+                rdEl.innerHTML = '<div class="empty-state"><p>No donations yet.</p></div>';
+            } else {
+                let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Food</th><th>Qty</th><th>Donor</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+                reports.recentDonations.forEach(d => {
+                    html += `<tr><td>#${d.id}</td><td>${d.food_description}</td><td>${d.quantity}</td><td>${d.donor_name}</td><td>${App.statusBadge(d.status)}</td><td>${App.formatDate(d.created_at)}</td></tr>`;
+                });
+                html += '</tbody></table></div>';
+                rdEl.innerHTML = html;
+            }
+
+            // Recent requests
+            const rrEl = document.getElementById('recentRequests');
+            if (reports.recentRequests.length === 0) {
+                rrEl.innerHTML = '<div class="empty-state"><p>No requests yet.</p></div>';
+            } else {
+                let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Donation</th><th>NGO</th><th>Status</th><th>Requested</th></tr></thead><tbody>';
+                reports.recentRequests.forEach(r => {
+                    html += `<tr><td>#${r.id}</td><td>${r.food_description}</td><td>${r.ngo_name}</td><td>${App.statusBadge(r.status)}</td><td>${App.formatDateTime(r.requested_at)}</td></tr>`;
+                });
+                html += '</tbody></table></div>';
+                rrEl.innerHTML = html;
+            }
+        } catch (err) {
+            console.error('Reports error:', err);
+        }
+    }
+    loadReports();
+    </script>
+</body>
+</html>

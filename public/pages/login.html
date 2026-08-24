@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container-narrow mt-2">
+        <div class="card">
+            <h2 class="text-center mb-2">Welcome Back</h2>
+            <p class="text-center text-muted mb-2">Sign in to your FoodShare account</p>
+
+            <div id="alert" class="alert"></div>
+
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required autocomplete="email" placeholder="your@email.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="Enter your password">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block btn-lg" id="loginBtn">Sign In</button>
+            </form>
+
+            <p class="text-center mt-2 text-muted">
+                Don't have an account? <a href="/register">Register here</a>
+            </p>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('loginBtn');
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        if (!email || !password) {
+            App.showAlert('alert', 'Please fill in all fields.');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Signing in...';
+        App.hideAlert('alert');
+
+        try {
+            const data = await App.post('/api/auth/login', { email, password });
+            window.location.href = data.redirect;
+        } catch (err) {
+            App.showAlert('alert', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Sign In';
+        }
+    });
+    </script>
+</body>
+</html>

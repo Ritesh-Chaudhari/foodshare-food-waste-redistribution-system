@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donations - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Donation Records</h1>
+            <p>Monitor all donations in the system</p>
+        </div>
+
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="">All</button>
+            <button class="filter-tab" data-filter="AVAILABLE">Available</button>
+            <button class="filter-tab" data-filter="REQUESTED">Requested</button>
+            <button class="filter-tab" data-filter="CONFIRMED">Confirmed</button>
+            <button class="filter-tab" data-filter="COMPLETED">Completed</button>
+            <button class="filter-tab" data-filter="EXPIRED">Expired</button>
+        </div>
+
+        <div id="donationsList" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    async function loadDonations(filter = '') {
+        try {
+            const url = filter ? `/api/admin/donations?status=${filter}` : '/api/admin/donations';
+            const donations = await App.get(url);
+            const container = document.getElementById('donationsList');
+
+            if (donations.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No donations found.</p></div>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Food</th><th>Qty</th><th>Donor</th><th>Type</th><th>NGO</th><th>Status</th><th>Created</th><th>Deadline</th></tr></thead><tbody>';
+            donations.forEach(d => {
+                html += `<tr>
+                    <td>#${d.id}</td>
+                    <td>${d.food_description}</td>
+                    <td>${d.quantity}</td>
+                    <td>${d.donor_name}</td>
+                    <td>${d.donor_type}</td>
+                    <td>${d.confirmed_ngo_name || '—'}</td>
+                    <td>${App.statusBadge(d.status)}</td>
+                    <td>${App.formatDate(d.created_at)}</td>
+                    <td>${App.formatDateTime(d.pickup_deadline)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        } catch (err) {
+            document.getElementById('donationsList').innerHTML = '<div class="alert alert-danger show">Failed to load donations.</div>';
+        }
+    }
+
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            loadDonations(tab.dataset.filter);
+        });
+    });
+
+    loadDonations();
+    </script>
+</body>
+</html>

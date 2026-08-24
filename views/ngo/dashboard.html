@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGO Dashboard - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>NGO Dashboard</h1>
+            <p>Overview of available donations and your activity</p>
+        </div>
+
+        <div id="stats" class="stats-grid">
+            <div class="stat-card stat-success"><div class="stat-number" id="stat-available">-</div><div class="stat-label">Available Donations</div></div>
+            <div class="stat-card stat-warning"><div class="stat-number" id="stat-pending">-</div><div class="stat-label">My Pending Requests</div></div>
+            <div class="stat-card stat-info"><div class="stat-number" id="stat-confirmed">-</div><div class="stat-label">Confirmed</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-collected">-</div><div class="stat-label">Collected</div></div>
+            <div class="stat-card stat-success"><div class="stat-number" id="stat-completed">-</div><div class="stat-label">Completed</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-total">-</div><div class="stat-label">Total Requests</div></div>
+        </div>
+
+        <div class="card">
+            <div class="flex justify-between items-center mb-1">
+                <h3>Available Donations</h3>
+                <a href="/ngo/available-donations" class="btn btn-outline btn-sm">View All</a>
+            </div>
+            <div id="availableDonations" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+        </div>
+
+        <div class="card">
+            <div class="flex justify-between items-center mb-1">
+                <h3>My Active Collections</h3>
+                <a href="/ngo/confirmed" class="btn btn-outline btn-sm">View All</a>
+            </div>
+            <div id="confirmedDonations" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    async function loadDashboard() {
+        try {
+            const stats = await App.get('/api/ngo/dashboard-stats');
+            document.getElementById('stat-available').textContent = stats.available;
+            document.getElementById('stat-pending').textContent = stats.myPendingRequests;
+            document.getElementById('stat-confirmed').textContent = stats.confirmed;
+            document.getElementById('stat-collected').textContent = stats.collected || 0;
+            document.getElementById('stat-completed').textContent = stats.completed;
+            document.getElementById('stat-total').textContent = stats.totalMyRequests;
+
+            // Load available donations
+            const donations = await App.get('/api/ngo/available-donations');
+            const availEl = document.getElementById('availableDonations');
+            if (donations.length === 0) {
+                availEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🍽️</div><p>There are currently no available donations.</p></div>';
+            } else {
+                let html = '';
+                donations.slice(0, 3).forEach(d => {
+                    html += `<div class="donation-card">
+                        <div class="donation-card-header">
+                            <h3>${d.food_description}</h3>
+                            ${App.statusBadge(d.status)}
+                        </div>
+                        <div class="donation-card-details">
+                            <div class="detail-item"><span class="detail-label">Donor:</span> ${d.donor_name} (${d.donor_type})</div>
+                            <div class="detail-item"><span class="detail-label">Quantity:</span> ${d.quantity}</div>
+                            <div class="detail-item"><span class="detail-label">Pickup:</span> ${d.pickup_location}</div>
+                            <div class="detail-item"><span class="detail-label">Deadline:</span> ${App.formatDateTime(d.pickup_deadline)}</div>
+                        </div>
+                    </div>`;
+                });
+                availEl.innerHTML = html;
+            }
+
+            // Load confirmed/collected donations
+            const confirmed = await App.get('/api/ngo/confirmed');
+            const confEl = document.getElementById('confirmedDonations');
+            if (confirmed.length === 0) {
+                confEl.innerHTML = '<div class="empty-state"><p>No active collections. When a donor confirms your request, it will appear here.</p></div>';
+            } else {
+                let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Food</th><th>Quantity</th><th>Donor</th><th>Status</th><th>Deadline</th></tr></thead><tbody>';
+                confirmed.forEach(d => {
+                    html += `<tr><td>#${d.id}</td><td>${d.food_description}</td><td>${d.quantity}</td><td>${d.donor_name}</td><td>${App.statusBadge(d.status)}</td><td>${App.formatDateTime(d.pickup_deadline)}</td></tr>`;
+                });
+                html += '</tbody></table></div>';
+                confEl.innerHTML = html;
+            }
+        } catch (err) {
+            console.error('NGO dashboard error:', err);
+        }
+    }
+    loadDashboard();
+    </script>
+</body>
+</html>

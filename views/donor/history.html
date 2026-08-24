@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donation History - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Donation History</h1>
+            <p>View your collected, completed, and expired donations</p>
+        </div>
+
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all">All History</button>
+            <button class="filter-tab" data-filter="COLLECTED">Collected</button>
+            <button class="filter-tab" data-filter="COMPLETED">Completed</button>
+            <button class="filter-tab" data-filter="EXPIRED">Expired</button>
+        </div>
+
+        <div id="historyList" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    let allHistory = [];
+
+    async function loadHistory(filter = 'all') {
+        try {
+            if (allHistory.length === 0) {
+                allHistory = await App.get('/api/donor/donations');
+            }
+
+            let filtered = allHistory.filter(d => d.status === 'COMPLETED' || d.status === 'EXPIRED' || d.status === 'COLLECTED');
+            if (filter !== 'all') {
+                filtered = allHistory.filter(d => d.status === filter);
+            }
+
+            const container = document.getElementById('historyList');
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No history records found.</p></div>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Food</th><th>Quantity</th><th>NGO</th><th>Status</th><th>Date</th></tr></thead><tbody>';
+            filtered.forEach(d => {
+                const date = d.collected_at || d.completed_at || (d.status === 'EXPIRED' ? d.pickup_deadline : null);
+                html += `<tr>
+                    <td>#${d.id}</td>
+                    <td>${d.food_description}</td>
+                    <td>${d.quantity}</td>
+                    <td>${d.confirmed_ngo_name || '—'}</td>
+                    <td>${App.statusBadge(d.status)}</td>
+                    <td>${date ? App.formatDateTime(date) : '—'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        } catch (err) {
+            document.getElementById('historyList').innerHTML = '<div class="alert alert-danger show">Failed to load history.</div>';
+        }
+    }
+
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            loadHistory(tab.dataset.filter);
+        });
+    });
+
+    loadHistory();
+    </script>
+</body>
+</html>

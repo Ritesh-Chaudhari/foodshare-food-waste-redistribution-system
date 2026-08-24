@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Admin Dashboard</h1>
+            <p>System overview and management</p>
+        </div>
+
+        <h3 class="mb-1">Users</h3>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-number" id="stat-totalDonors">-</div><div class="stat-label">Total Donors</div></div>
+            <div class="stat-card stat-warning"><div class="stat-number" id="stat-pendingDonors">-</div><div class="stat-label">Pending Donor Approvals</div></div>
+            <div class="stat-card stat-success"><div class="stat-number" id="stat-approvedDonors">-</div><div class="stat-label">Approved Donors</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-totalNgos">-</div><div class="stat-label">Total NGOs</div></div>
+            <div class="stat-card stat-warning"><div class="stat-number" id="stat-pendingNgos">-</div><div class="stat-label">Pending NGO Verifications</div></div>
+            <div class="stat-card stat-success"><div class="stat-number" id="stat-approvedNgos">-</div><div class="stat-label">Approved NGOs</div></div>
+        </div>
+
+        <h3 class="mb-1">Donations</h3>
+        <div class="stats-grid">
+            <div class="stat-card stat-success"><div class="stat-number" id="stat-available">-</div><div class="stat-label">Available</div></div>
+            <div class="stat-card stat-warning"><div class="stat-number" id="stat-requested">-</div><div class="stat-label">Requested</div></div>
+            <div class="stat-card stat-info"><div class="stat-number" id="stat-confirmed">-</div><div class="stat-label">Confirmed</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-collected">-</div><div class="stat-label">Collected</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-completed">-</div><div class="stat-label">Completed</div></div>
+            <div class="stat-card stat-danger"><div class="stat-number" id="stat-expired">-</div><div class="stat-label">Expired</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-total">-</div><div class="stat-label">Total Donations</div></div>
+        </div>
+
+        <h3 class="mb-1">Requests</h3>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-number" id="stat-totalRequests">-</div><div class="stat-label">Total Requests</div></div>
+            <div class="stat-card stat-warning"><div class="stat-number" id="stat-pendingRequests">-</div><div class="stat-label">Pending Requests</div></div>
+        </div>
+
+        <div class="mt-2">
+            <div class="flex gap-1 flex-wrap">
+                <a href="/admin/users" class="btn btn-primary">Manage Users</a>
+                <a href="/admin/verification" class="btn btn-warning">NGO Verification</a>
+                <a href="/admin/donations" class="btn btn-outline">View Donations</a>
+                <a href="/admin/requests" class="btn btn-outline">View Requests</a>
+                <a href="/admin/reports" class="btn btn-outline">Reports</a>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    async function loadDashboard() {
+        try {
+            const stats = await App.get('/api/admin/dashboard-stats');
+            document.getElementById('stat-totalDonors').textContent = stats.totalDonors;
+            document.getElementById('stat-pendingDonors').textContent = stats.pendingDonors;
+            document.getElementById('stat-approvedDonors').textContent = stats.approvedDonors;
+            document.getElementById('stat-totalNgos').textContent = stats.totalNgos;
+            document.getElementById('stat-pendingNgos').textContent = stats.pendingNgos;
+            document.getElementById('stat-approvedNgos').textContent = stats.approvedNgos;
+            document.getElementById('stat-available').textContent = stats.availableDonations;
+            document.getElementById('stat-requested').textContent = stats.requestedDonations;
+            document.getElementById('stat-confirmed').textContent = stats.confirmedDonations;
+            document.getElementById('stat-collected').textContent = stats.collectedDonations || 0;
+            document.getElementById('stat-completed').textContent = stats.completedDonations;
+            document.getElementById('stat-expired').textContent = stats.expiredDonations;
+            document.getElementById('stat-total').textContent = stats.totalDonations;
+            document.getElementById('stat-totalRequests').textContent = stats.totalRequests || 0;
+            document.getElementById('stat-pendingRequests').textContent = stats.pendingRequests || 0;
+        } catch (err) {
+            console.error('Admin dashboard error:', err);
+        }
+    }
+    loadDashboard();
+    </script>
+</body>
+</html>

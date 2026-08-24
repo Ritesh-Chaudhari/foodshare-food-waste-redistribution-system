@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGO Verification - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>NGO Verification</h1>
+            <p>Review and manage NGO registration requests</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="">All</button>
+            <button class="filter-tab" data-filter="PENDING">Pending</button>
+            <button class="filter-tab" data-filter="APPROVED">Approved</button>
+            <button class="filter-tab" data-filter="REJECTED">Rejected</button>
+        </div>
+
+        <div id="ngosList" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+    </div>
+
+    <div class="modal-overlay" id="ngoModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>NGO Details</h3>
+                <button class="modal-close" onclick="App.closeModal('ngoModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="ngoModalBody"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    async function loadNgos(filter = '') {
+        try {
+            const url = filter ? `/api/admin/ngos?status=${filter}` : '/api/admin/ngos';
+            const ngos = await App.get(url);
+            const container = document.getElementById('ngosList');
+
+            if (ngos.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No NGOs found.</p></div>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>NGO Name</th><th>Contact</th><th>Email</th><th>City</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+            ngos.forEach(n => {
+                html += `<tr>
+                    <td>#${n.id}</td>
+                    <td>${n.ngo_name}</td>
+                    <td>${n.contact_person}</td>
+                    <td>${n.email}</td>
+                    <td>${n.city}</td>
+                    <td>${App.statusBadge(n.verification_status)}</td>
+                    <td>
+                        <button class="btn btn-outline btn-sm" onclick="viewNgo(${n.id})">View</button>
+                        ${n.verification_status === 'PENDING' ? `
+                            <button class="btn btn-success btn-sm" onclick="approveNgo(${n.id})">Approve</button>
+                            <button class="btn btn-danger btn-sm" onclick="rejectNgo(${n.id})">Reject</button>
+                        ` : ''}
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        } catch (err) {
+            document.getElementById('ngosList').innerHTML = '<div class="alert alert-danger show">Failed to load NGOs.</div>';
+        }
+    }
+
+    async function viewNgo(id) {
+        try {
+            const ngo = await App.get(`/api/admin/ngos/${id}`);
+            const body = document.getElementById('ngoModalBody');
+            body.innerHTML = `
+                <p><strong>NGO Name:</strong> ${ngo.ngo_name}</p>
+                <p><strong>Contact Person:</strong> ${ngo.contact_person}</p>
+                <p><strong>Phone:</strong> ${ngo.phone}</p>
+                <p><strong>Email:</strong> ${ngo.email}</p>
+                <p><strong>Address:</strong> ${ngo.address}, ${ngo.city}</p>
+                ${ngo.registration_info ? `<p><strong>Registration Info:</strong> ${ngo.registration_info}</p>` : ''}
+                <p><strong>Status:</strong> ${App.statusBadge(ngo.verification_status)}</p>
+                <p><strong>Registered:</strong> ${App.formatDate(ngo.created_at)}</p>
+            `;
+            App.openModal('ngoModal');
+        } catch (err) {
+            App.showAlert('alert', 'Failed to load NGO details.');
+        }
+    }
+
+    async function approveNgo(id) {
+        if (!confirm('Approve this NGO? They will be able to request food donations.')) return;
+        try {
+            App.hideAlert('alert');
+            await App.post(`/api/admin/ngos/${id}/approve`, {});
+            App.showAlert('alert', 'NGO approved successfully.', 'success');
+            loadNgos(document.querySelector('.filter-tab.active').dataset.filter);
+        } catch (err) { App.showAlert('alert', err.message); }
+    }
+
+    async function rejectNgo(id) {
+        if (!confirm('Reject this NGO?')) return;
+        try {
+            App.hideAlert('alert');
+            await App.post(`/api/admin/ngos/${id}/reject`, {});
+            App.showAlert('alert', 'NGO rejected.', 'success');
+            loadNgos(document.querySelector('.filter-tab.active').dataset.filter);
+        } catch (err) { App.showAlert('alert', err.message); }
+    }
+
+    function checkEmpty() {
+        const tbody = document.querySelector('tbody');
+        if (tbody && tbody.querySelectorAll('tr').length === 0) {
+            document.getElementById('ngosList').innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No NGOs found.</p></div>';
+        }
+    }
+
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            loadNgos(tab.dataset.filter);
+        });
+    });
+
+    loadNgos();
+    </script>
+</body>
+</html>

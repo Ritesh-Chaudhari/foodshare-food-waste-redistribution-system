@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Requests - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>My Requests</h1>
+            <p>Track the status of your donation requests</p>
+        </div>
+
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all">All</button>
+            <button class="filter-tab" data-filter="PENDING">Pending</button>
+            <button class="filter-tab" data-filter="ACCEPTED">Accepted</button>
+            <button class="filter-tab" data-filter="REJECTED">Rejected</button>
+        </div>
+
+        <div id="requestsList" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    let allRequests = [];
+
+    async function loadRequests(filter = 'all') {
+        try {
+            allRequests = await App.get('/api/ngo/my-requests');
+            filterRequests(filter);
+        } catch (err) {
+            document.getElementById('requestsList').innerHTML = '<div class="alert alert-danger show">Failed to load requests.</div>';
+        }
+    }
+
+    function filterRequests(filter) {
+        let filtered = allRequests;
+        if (filter !== 'all') {
+            filtered = allRequests.filter(r => r.status === filter);
+        }
+
+        const container = document.getElementById('requestsList');
+        if (filtered.length === 0) {
+            container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No requests found.</p></div>';
+            return;
+        }
+
+        let html = '<div class="table-responsive"><table><thead><tr><th>Donation</th><th>Food</th><th>Quantity</th><th>Donor</th><th>Request Status</th><th>Donation Status</th><th>Requested</th></tr></thead><tbody>';
+        filtered.forEach(r => {
+            html += `<tr>
+                <td>#${r.donation_id}</td>
+                <td>${r.food_description}</td>
+                <td>${r.quantity}</td>
+                <td>${r.donor_name} (${r.donor_type})</td>
+                <td>${App.statusBadge(r.status)}</td>
+                <td>${App.statusBadge(r.donation_status)}</td>
+                <td>${App.formatDateTime(r.requested_at)}</td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    }
+
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            filterRequests(tab.dataset.filter);
+        });
+    });
+
+    loadRequests();
+    </script>
+</body>
+</html>

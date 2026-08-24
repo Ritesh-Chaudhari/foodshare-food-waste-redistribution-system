@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donor Dashboard - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Donor Dashboard</h1>
+            <p>Overview of your donations and activity</p>
+        </div>
+
+        <div id="stats" class="stats-grid">
+            <div class="stat-card"><div class="stat-number" id="stat-active">-</div><div class="stat-label">Active Donations</div></div>
+            <div class="stat-card stat-warning"><div class="stat-number" id="stat-pending">-</div><div class="stat-label">Pending Requests</div></div>
+            <div class="stat-card stat-info"><div class="stat-number" id="stat-confirmed">-</div><div class="stat-label">Confirmed</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-collected">-</div><div class="stat-label">Collected</div></div>
+            <div class="stat-card stat-success"><div class="stat-number" id="stat-completed">-</div><div class="stat-label">Completed</div></div>
+            <div class="stat-card stat-danger"><div class="stat-number" id="stat-expired">-</div><div class="stat-label">Expired</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-total">-</div><div class="stat-label">Total Donations</div></div>
+        </div>
+
+        <div class="card">
+            <div class="flex justify-between items-center mb-1">
+                <h3>Recent Donations</h3>
+                <a href="/donor/create-donation" class="btn btn-primary btn-sm">+ Create Donation</a>
+            </div>
+            <div id="recentDonations" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+        </div>
+
+        <div class="card">
+            <div class="flex justify-between items-center mb-1">
+                <h3>Recent Requests</h3>
+                <a href="/donor/requests" class="btn btn-outline btn-sm">View All</a>
+            </div>
+            <div id="recentRequests" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    async function loadDashboard() {
+        try {
+            // Load stats
+            const stats = await App.get('/api/donor/dashboard-stats');
+            document.getElementById('stat-active').textContent = stats.active;
+            document.getElementById('stat-pending').textContent = stats.pendingRequests;
+            document.getElementById('stat-confirmed').textContent = stats.confirmed;
+            document.getElementById('stat-collected').textContent = stats.collected || 0;
+            document.getElementById('stat-completed').textContent = stats.completed;
+            document.getElementById('stat-expired').textContent = stats.expired;
+            document.getElementById('stat-total').textContent = stats.total;
+
+            // Load recent donations
+            const donations = await App.get('/api/donor/donations');
+            const recentEl = document.getElementById('recentDonations');
+            if (donations.length === 0) {
+                recentEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>You haven\'t created any donations yet.</p><a href="/donor/create-donation" class="btn btn-primary btn-sm mt-1">Create Your First Donation</a></div>';
+            } else {
+                let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Food</th><th>Quantity</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+                donations.slice(0, 5).forEach(d => {
+                    html += `<tr><td>#${d.id}</td><td>${d.food_description}</td><td>${d.quantity}</td><td>${App.statusBadge(d.status)}</td><td>${App.formatDate(d.created_at)}</td></tr>`;
+                });
+                html += '</tbody></table></div>';
+                recentEl.innerHTML = html;
+            }
+
+            // Load recent requests
+            const requests = await App.get('/api/donor/requests');
+            const reqEl = document.getElementById('recentRequests');
+            if (requests.length === 0) {
+                reqEl.innerHTML = '<div class="empty-state"><p>No NGO requests have been received yet.</p></div>';
+            } else {
+                let html = '<div class="table-responsive"><table><thead><tr><th>Donation</th><th>NGO</th><th>Status</th><th>Date</th></tr></thead><tbody>';
+                requests.slice(0, 5).forEach(r => {
+                    html += `<tr><td>#${r.donation_id} - ${r.food_description}</td><td>${r.ngo_name}</td><td>${App.statusBadge(r.status)}</td><td>${App.formatDate(r.requested_at)}</td></tr>`;
+                });
+                html += '</tbody></table></div>';
+                reqEl.innerHTML = html;
+            }
+        } catch (err) {
+            console.error('Dashboard load error:', err);
+        }
+    }
+    loadDashboard();
+    </script>
+</body>
+</html>

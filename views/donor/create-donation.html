@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Donation - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container-narrow mt-2">
+        <div class="card">
+            <div class="page-header">
+                <h1>Create Donation</h1>
+                <p>List your surplus food for NGOs to collect</p>
+            </div>
+
+            <div id="alert" class="alert"></div>
+            <div id="success" class="alert alert-success"></div>
+
+            <form id="donationForm">
+                <div class="form-group">
+                    <label for="foodDescription">Food Description *</label>
+                    <textarea id="foodDescription" name="foodDescription" required placeholder="e.g., Rice, Dal and Vegetable" rows="2"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="quantity">Approximate Quantity *</label>
+                        <input type="text" id="quantity" name="quantity" required placeholder="e.g., 40 meals">
+                    </div>
+                    <div class="form-group">
+                        <label for="foodCategory">Food Category</label>
+                        <select id="foodCategory" name="foodCategory">
+                            <option value="General">General</option>
+                            <option value="Vegetarian">Vegetarian</option>
+                            <option value="Non-Vegetarian">Non-Vegetarian</option>
+                            <option value="Snacks">Snacks</option>
+                            <option value="Beverages">Beverages</option>
+                            <option value="Mixed">Mixed</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="preparationTime">Preparation Time</label>
+                        <input type="time" id="preparationTime" name="preparationTime">
+                    </div>
+                    <div class="form-group">
+                        <label for="pickupDeadline">Pickup Deadline *</label>
+                        <input type="datetime-local" id="pickupDeadline" name="pickupDeadline" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="pickupLocation">Pickup Location / Address *</label>
+                    <input type="text" id="pickupLocation" name="pickupLocation" required placeholder="e.g., Demo College Canteen, Main Road, Shirpur">
+                </div>
+
+                <div class="form-group">
+                    <label for="additionalNotes">Additional Notes</label>
+                    <textarea id="additionalNotes" name="additionalNotes" placeholder="Any special instructions or notes for the NGO" rows="2"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block btn-lg" id="submitBtn">Create Donation</button>
+            </form>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    // Set minimum pickup deadline to now
+    const deadlineInput = document.getElementById('pickupDeadline');
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    deadlineInput.min = now.toISOString().slice(0, 16);
+
+    document.getElementById('donationForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('submitBtn');
+        const form = e.target;
+
+        const data = {
+            foodDescription: form.foodDescription.value.trim(),
+            quantity: form.quantity.value.trim(),
+            foodCategory: form.foodCategory.value,
+            preparationTime: form.preparationTime.value,
+            pickupLocation: form.pickupLocation.value.trim(),
+            pickupDeadline: new Date(form.pickupDeadline.value).toISOString(),
+            additionalNotes: form.additionalNotes.value.trim()
+        };
+
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+        App.hideAlert('alert');
+        App.hideAlert('success');
+
+        try {
+            const result = await App.post('/api/donor/donations', data);
+            document.getElementById('success').innerHTML = result.message + '<br><br><a href="/donor/my-donations" class="btn btn-primary">View My Donations</a>';
+            document.getElementById('success').classList.add('show');
+            form.reset();
+        } catch (err) {
+            App.showAlert('alert', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Create Donation';
+        }
+    });
+    </script>
+</body>
+</html>

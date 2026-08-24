@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGO Requests - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>NGO Requests</h1>
+            <p>Review and respond to NGO requests for your donations</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all">All</button>
+            <button class="filter-tab" data-filter="PENDING">Pending</button>
+            <button class="filter-tab" data-filter="ACCEPTED">Accepted</button>
+            <button class="filter-tab" data-filter="REJECTED">Rejected</button>
+        </div>
+
+        <div id="requestsList" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+    </div>
+
+    <!-- NGO Details Modal -->
+    <div class="modal-overlay" id="ngoModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>NGO Details</h3>
+                <button class="modal-close" onclick="App.closeModal('ngoModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="ngoModalBody"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    let allRequests = [];
+
+    async function loadRequests(filter = 'all') {
+        try {
+            allRequests = await App.get('/api/donor/requests');
+            filterRequests(filter);
+        } catch (err) {
+            document.getElementById('requestsList').innerHTML = '<div class="alert alert-danger show">Failed to load requests.</div>';
+        }
+    }
+
+    function filterRequests(filter) {
+        let filtered = allRequests;
+        if (filter !== 'all') {
+            filtered = allRequests.filter(r => r.status === filter);
+        }
+
+        const container = document.getElementById('requestsList');
+        if (filtered.length === 0) {
+            container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No requests found.</p></div>';
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(r => {
+            html += `<div class="card">
+                <div class="flex justify-between items-center flex-wrap gap-1 mb-1">
+                    <div>
+                        <strong>Donation #${r.donation_id}</strong> — ${r.food_description} (${r.quantity})
+                    </div>
+                    ${App.statusBadge(r.status)}
+                </div>
+                <div class="text-muted" style="font-size:0.85rem;">
+                    <strong>NGO:</strong> ${r.ngo_name} &nbsp;|&nbsp;
+                    <strong>Contact:</strong> ${r.contact_person} &nbsp;|&nbsp;
+                    <strong>Phone:</strong> ${r.ngo_phone} &nbsp;|&nbsp;
+                    <strong>Requested:</strong> ${App.formatDateTime(r.requested_at)}
+                </div>
+                <div class="mt-1 flex gap-1 flex-wrap">
+                    <button class="btn btn-outline btn-sm" onclick="viewNgo(${JSON.stringify(r).replace(/"/g, '&quot;')})">View NGO Details</button>
+                    ${r.status === 'PENDING' ? `
+                        <button class="btn btn-success btn-sm" onclick="acceptRequest(${r.id})">Accept</button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectRequest(${r.id})">Reject</button>
+                    ` : ''}
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function viewNgo(request) {
+        const body = document.getElementById('ngoModalBody');
+        body.innerHTML = `
+            <p><strong>NGO Name:</strong> ${request.ngo_name}</p>
+            <p><strong>Contact Person:</strong> ${request.contact_person}</p>
+            <p><strong>Phone:</strong> ${request.ngo_phone}</p>
+            <p><strong>Address:</strong> ${request.ngo_address}</p>
+            ${request.registration_info ? `<p><strong>Registration Info:</strong> ${request.registration_info}</p>` : ''}
+        `;
+        App.openModal('ngoModal');
+    }
+
+    async function acceptRequest(requestId) {
+        if (!confirm('Are you sure you want to accept this NGO request? All other pending requests for this donation will be rejected.')) return;
+        try {
+            App.hideAlert('alert');
+            await App.post(`/api/donor/requests/${requestId}/accept`, {});
+            App.showAlert('alert', 'NGO request confirmed successfully.', 'success');
+            allRequests = [];
+            loadRequests(document.querySelector('.filter-tab.active').dataset.filter);
+        } catch (err) {
+            App.showAlert('alert', err.message);
+        }
+    }
+
+    async function rejectRequest(requestId) {
+        if (!confirm('Are you sure you want to reject this request?')) return;
+        try {
+            App.hideAlert('alert');
+            await App.post(`/api/donor/requests/${requestId}/reject`, {});
+            App.showAlert('alert', 'Request rejected.', 'success');
+            allRequests = [];
+            loadRequests(document.querySelector('.filter-tab.active').dataset.filter);
+        } catch (err) {
+            App.showAlert('alert', err.message);
+        }
+    }
+
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            filterRequests(tab.dataset.filter);
+        });
+    });
+
+    loadRequests();
+    </script>
+</body>
+</html>

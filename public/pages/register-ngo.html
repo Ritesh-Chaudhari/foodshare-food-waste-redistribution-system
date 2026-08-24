@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register as NGO - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container-narrow mt-2">
+        <div class="card">
+            <h2 class="text-center mb-1">Register as NGO</h2>
+            <p class="text-center text-muted mb-2">Register your NGO to collect and redistribute surplus food</p>
+
+            <div id="alert" class="alert"></div>
+            <div id="success" class="alert alert-success"></div>
+
+            <form id="ngoForm">
+                <div class="form-group">
+                    <label for="ngoName">NGO Name *</label>
+                    <input type="text" id="ngoName" name="ngoName" required placeholder="e.g., Community Welfare Society">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="contactPerson">Contact Person *</label>
+                        <input type="text" id="contactPerson" name="contactPerson" required placeholder="Full name">
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone Number *</label>
+                        <input type="tel" id="phone" name="phone" required placeholder="10-digit mobile number" pattern="[6-9][0-9]{9}">
+                        <span class="form-hint">10-digit Indian mobile number</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email *</label>
+                    <input type="email" id="email" name="email" required placeholder="your@email.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="address">Address *</label>
+                    <input type="text" id="address" name="address" required placeholder="Full address">
+                </div>
+
+                <div class="form-group">
+                    <label for="city">City *</label>
+                    <input type="text" id="city" name="city" required placeholder="City name">
+                </div>
+
+                <div class="form-group">
+                    <label for="registrationInfo">Registration / Identification Information</label>
+                    <textarea id="registrationInfo" name="registrationInfo" placeholder="NGO registration number, government ID, or any verification details"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="password">Password *</label>
+                        <input type="password" id="password" name="password" required minlength="6" placeholder="Min 6 characters">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm Password *</label>
+                        <input type="password" id="confirmPassword" name="confirmPassword" required placeholder="Re-enter password">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block btn-lg" id="registerBtn">Create Account</button>
+            </form>
+
+            <p class="text-center mt-2 text-muted">
+                Already have an account? <a href="/login">Sign in here</a>
+            </p>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    fetch('/api/city').then(r => r.json()).then(d => {
+        const cityInput = document.getElementById('city');
+        if (cityInput && d.city) cityInput.value = d.city;
+    });
+
+    document.getElementById('ngoForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('registerBtn');
+        const form = e.target;
+
+        const data = {
+            ngoName: form.ngoName.value.trim(),
+            contactPerson: form.contactPerson.value.trim(),
+            phone: form.phone.value.trim(),
+            email: form.email.value.trim(),
+            address: form.address.value.trim(),
+            city: form.city.value.trim(),
+            registrationInfo: form.registrationInfo.value.trim(),
+            password: form.password.value,
+            confirmPassword: form.confirmPassword.value
+        };
+
+        btn.disabled = true;
+        btn.textContent = 'Creating account...';
+        App.hideAlert('alert');
+        App.hideAlert('success');
+
+        try {
+            const result = await App.post('/api/auth/register-ngo', data);
+            document.getElementById('success').innerHTML = result.message + '<br><br><a href="/login" class="btn btn-primary">Go to Login</a>';
+            document.getElementById('success').classList.add('show');
+            form.style.display = 'none';
+        } catch (err) {
+            App.showAlert('alert', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Create Account';
+        }
+    });
+    </script>
+</body>
+</html>

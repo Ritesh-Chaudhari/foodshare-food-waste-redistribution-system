@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Available Donations - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Available Donations</h1>
+            <p>Browse surplus food available for collection</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+        <div id="donationsList" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+    </div>
+
+    <!-- Donation Detail Modal -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Donation Details</h3>
+                <button class="modal-close" onclick="App.closeModal('detailModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="detailModalBody"></div>
+            <div class="modal-footer" id="detailModalFooter"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    async function loadDonations() {
+        try {
+            const donations = await App.get('/api/ngo/available-donations');
+            const container = document.getElementById('donationsList');
+
+            if (donations.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">🍽️</div><h3>No Available Donations</h3><p>There are currently no available donations. Check back later.</p></div>';
+                return;
+            }
+
+            let html = '';
+            donations.forEach(d => {
+                html += `<div class="donation-card">
+                    <div class="donation-card-header">
+                        <h3>${d.food_description}</h3>
+                        ${App.statusBadge(d.status)}
+                    </div>
+                    <div class="donation-card-details">
+                        <div class="detail-item"><span class="detail-label">Donor:</span> ${d.donor_name} (${d.donor_type})</div>
+                        <div class="detail-item"><span class="detail-label">Quantity:</span> ${d.quantity}</div>
+                        <div class="detail-item"><span class="detail-label">Category:</span> ${d.food_category || 'General'}</div>
+                        <div class="detail-item"><span class="detail-label">Prep Time:</span> ${d.preparation_time || '—'}</div>
+                        <div class="detail-item"><span class="detail-label">Pickup Location:</span> ${d.pickup_location}</div>
+                        <div class="detail-item"><span class="detail-label">Deadline:</span> ${App.formatDateTime(d.pickup_deadline)}</div>
+                    </div>
+                    ${d.additional_notes ? `<div class="text-muted" style="font-size:0.85rem; margin-bottom:0.5rem;"><strong>Notes:</strong> ${d.additional_notes}</div>` : ''}
+                    <div class="donation-card-footer">
+                        <button class="btn btn-primary btn-sm" onclick="requestDonation(${d.id})">Request Donation</button>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        } catch (err) {
+            document.getElementById('donationsList').innerHTML = '<div class="alert alert-danger show">Failed to load donations.</div>';
+        }
+    }
+
+    async function requestDonation(donationId) {
+        if (!confirm('Are you sure you want to request this donation? You will be requesting the entire quantity.')) return;
+
+        try {
+            App.hideAlert('alert');
+            const result = await App.post(`/api/ngo/request-donation/${donationId}`, {});
+            App.showAlert('alert', result.message, 'success');
+            loadDonations();
+        } catch (err) {
+            App.showAlert('alert', err.message);
+        }
+    }
+
+    loadDonations();
+    </script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Donors - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Manage Donors</h1>
+            <p>View, approve, or reject donor registrations</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="">All</button>
+            <button class="filter-tab" data-filter="PENDING">Pending</button>
+            <button class="filter-tab" data-filter="APPROVED">Approved</button>
+            <button class="filter-tab" data-filter="REJECTED">Rejected</button>
+        </div>
+
+        <div id="donorsList" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+    </div>
+
+    <!-- Donor Detail Modal -->
+    <div class="modal-overlay" id="donorModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Donor Details</h3>
+                <button class="modal-close" onclick="App.closeModal('donorModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="donorModalBody"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    async function loadDonors(filter = '') {
+        try {
+            const url = filter ? `/api/admin/donors?status=${filter}` : '/api/admin/donors';
+            const donors = await App.get(url);
+            const container = document.getElementById('donorsList');
+
+            if (donors.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No donors found.</p></div>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Organization</th><th>Type</th><th>Contact</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+            donors.forEach(d => {
+                html += `<tr>
+                    <td>#${d.id}</td>
+                    <td>${d.organization_name}</td>
+                    <td>${d.organization_type}</td>
+                    <td>${d.contact_person}</td>
+                    <td>${d.email}</td>
+                    <td>${App.statusBadge(d.verification_status)}</td>
+                    <td>
+                        <button class="btn btn-outline btn-sm" onclick="viewDonor(${d.id})">View</button>
+                        ${d.verification_status === 'PENDING' ? `
+                            <button class="btn btn-success btn-sm" onclick="approveDonor(${d.id})">Approve</button>
+                            <button class="btn btn-danger btn-sm" onclick="rejectDonor(${d.id})">Reject</button>
+                        ` : ''}
+                        <button class="btn btn-outline btn-sm" onclick="toggleActive(${d.id})">${d.is_active ? 'Disable' : 'Enable'}</button>
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        } catch (err) {
+            document.getElementById('donorsList').innerHTML = '<div class="alert alert-danger show">Failed to load donors.</div>';
+        }
+    }
+
+    async function viewDonor(id) {
+        try {
+            const donor = await App.get(`/api/admin/donors/${id}`);
+            const body = document.getElementById('donorModalBody');
+            body.innerHTML = `
+                <p><strong>Organization:</strong> ${donor.organization_name} (${donor.organization_type})</p>
+                <p><strong>Contact Person:</strong> ${donor.contact_person}</p>
+                <p><strong>Phone:</strong> ${donor.phone}</p>
+                <p><strong>Email:</strong> ${donor.email}</p>
+                <p><strong>Address:</strong> ${donor.address}, ${donor.city}</p>
+                <p><strong>Status:</strong> ${App.statusBadge(donor.verification_status)}</p>
+                <p><strong>Account:</strong> ${donor.is_active ? 'Active' : 'Disabled'}</p>
+                <p><strong>Registered:</strong> ${App.formatDate(donor.created_at)}</p>
+            `;
+            App.openModal('donorModal');
+        } catch (err) {
+            App.showAlert('alert', 'Failed to load donor details.');
+        }
+    }
+
+    async function approveDonor(id) {
+        if (!confirm('Approve this donor?')) return;
+        try {
+            App.hideAlert('alert');
+            await App.post(`/api/admin/donors/${id}/approve`, {});
+            App.showAlert('alert', 'Donor approved successfully.', 'success');
+            loadDonors(document.querySelector('.filter-tab.active').dataset.filter);
+        } catch (err) { App.showAlert('alert', err.message); }
+    }
+
+    async function rejectDonor(id) {
+        if (!confirm('Reject this donor?')) return;
+        try {
+            App.hideAlert('alert');
+            await App.post(`/api/admin/donors/${id}/reject`, {});
+            App.showAlert('alert', 'Donor rejected.', 'success');
+            loadDonors(document.querySelector('.filter-tab.active').dataset.filter);
+        } catch (err) { App.showAlert('alert', err.message); }
+    }
+
+    async function toggleActive(id) {
+        if (!confirm('Toggle account status?')) return;
+        try {
+            App.hideAlert('alert');
+            const result = await App.post(`/api/admin/donors/${id}/toggle-active`, {});
+            App.showAlert('alert', result.message, 'success');
+            loadDonors(document.querySelector('.filter-tab.active').dataset.filter);
+        } catch (err) { App.showAlert('alert', err.message); }
+    }
+
+    function checkEmpty() {
+        const tbody = document.querySelector('tbody');
+        if (tbody && tbody.querySelectorAll('tr').length === 0) {
+            document.getElementById('donorsList').innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No donors found.</p></div>';
+        }
+    }
+
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            loadDonors(tab.dataset.filter);
+        });
+    });
+
+    loadDonors();
+    </script>
+</body>
+</html>

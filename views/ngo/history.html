@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collection History - FoodShare</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Collection History</h1>
+            <p>View your completed and collected food donations</p>
+        </div>
+
+        <div id="historyList" class="loading-overlay"><span class="spinner"></span> Loading...</div>
+    </div>
+
+    <footer class="footer">
+        <p>FoodShare — Food Waste Redistribution System &copy; 2026</p>
+    </footer>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/nav.js"></script>
+    <script>
+    async function loadHistory() {
+        try {
+            const history = await App.get('/api/ngo/history');
+            const container = document.getElementById('historyList');
+
+            if (history.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No collection history yet. Completed donations will appear here.</p></div>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Food</th><th>Quantity</th><th>Donor</th><th>Pickup Location</th><th>Status</th><th>Collected</th></tr></thead><tbody>';
+            history.forEach(d => {
+                html += `<tr>
+                    <td>#${d.id}</td>
+                    <td>${d.food_description}</td>
+                    <td>${d.quantity}</td>
+                    <td>${d.donor_name} (${d.donor_type})</td>
+                    <td>${d.pickup_location}</td>
+                    <td>${App.statusBadge(d.status)}</td>
+                    <td>${App.formatDateTime(d.collected_at)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        } catch (err) {
+            document.getElementById('historyList').innerHTML = '<div class="alert alert-danger show">Failed to load collection history.</div>';
+        }
+    }
+    loadHistory();
+    </script>
+</body>
+</html>
