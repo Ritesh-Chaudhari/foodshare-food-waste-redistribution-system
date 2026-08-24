@@ -75,13 +75,15 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`\n==========================================`);
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`\n========================================`);
     console.log(`  Food Waste Redistribution System`);
     console.log(`  Server running at http://localhost:${PORT}`);
-    console.log(`==========================================\n`);
-    console.log(`Admin Login: admin@foodshare.com / admin123`);
+    console.log(`========================================\n`);
+    console.log(`Admin Login: ${process.env.ADMIN_EMAIL || 'admin@foodshare.com'} / ${process.env.ADMIN_PASSWORD || 'admin123'}`);
     console.log(`City: ${process.env.CITY || 'Shirpur'}\n`);
-});
+  });
+}
 
 module.exports = app;
