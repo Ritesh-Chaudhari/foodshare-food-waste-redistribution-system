@@ -2,14 +2,16 @@ require('dotenv').config();
 
 const express = require('express');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
 const path = require('path');
 
-// Initialize database (runs schema creation)
+// Initialize database (runs schema creation in Turso)
 const db = require('./config/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Trust proxy for secure cookies on Render
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(express.json());
@@ -20,9 +22,8 @@ app.use('/css', express.static(path.join(__dirname, 'public/css')));
 app.use('/js', express.static(path.join(__dirname, 'public/js')));
 app.use('/pages', express.static(path.join(__dirname, 'public/pages')));
 
-// Session configuration
+// Session configuration (using in-memory store)
 app.use(session({
-    store: new SQLiteStore({ dir: path.join(__dirname, 'data'), db: 'sessions.db' }),
     secret: process.env.SESSION_SECRET || 'food-waste-app-secret',
     resave: false,
     saveUninitialized: false,
@@ -76,12 +77,12 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`\n========================================`);
-  console.log(`  Food Waste Redistribution System`);
-  console.log(`  Server running on port ${PORT}`);
-  console.log(`========================================\n`);
-  console.log(`Admin Login: ${process.env.ADMIN_EMAIL || 'admin@foodshare.com'} / ${process.env.ADMIN_PASSWORD || 'admin123'}`);
-  console.log(`City: ${process.env.CITY || 'Shirpur'}\n`);
+    console.log(`\n========================================`);
+    console.log(`  Food Waste Redistribution System`);
+    console.log(`  Server running on port ${PORT}`);
+    console.log(`========================================\n`);
+    console.log(`Admin Login: ${process.env.ADMIN_EMAIL || 'admin@foodshare.com'} / ${process.env.ADMIN_PASSWORD || 'admin123'}`);
+    console.log(`City: ${process.env.CITY || 'Shirpur'}\n`);
 });
 
 module.exports = app;
