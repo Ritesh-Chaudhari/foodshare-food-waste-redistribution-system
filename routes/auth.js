@@ -38,7 +38,7 @@ router.get('/register/ngo', isGuest, (req, res) => {
 });
 
 // POST /api/auth/register-donor
-router.post('/api/auth/register-donor', isGuest, (req, res) => {
+router.post('/api/auth/register-donor', isGuest, async (req, res) => {
     try {
         const { orgName, orgType, contactPerson, phone, email, address, city, password, confirmPassword } = req.body;
 
@@ -69,21 +69,29 @@ router.post('/api/auth/register-donor', isGuest, (req, res) => {
         }
 
         // Check for duplicate email
-        const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
-        if (existingUser) {
+        const existingResult = await db.execute({
+            sql: 'SELECT id FROM users WHERE email = ?',
+            args: [email.toLowerCase()]
+        });
+
+        if (existingResult.rows.length > 0) {
             return res.status(400).json({ error: 'An account with this email already exists.' });
         }
 
         // Hash password and create user
         const hashedPassword = bcrypt.hashSync(password, 10);
 
-        const insertUser = db.prepare('INSERT INTO users (email, password, role) VALUES (?, ?, ?)');
-        const result = insertUser.run(email.toLowerCase(), hashedPassword, 'donor');
+        const insertUserResult = await db.execute({
+            sql: 'INSERT INTO users (email, password, role) VALUES (?, ?, ?)',
+            args: [email.toLowerCase(), hashedPassword, 'donor']
+        });
 
-        const insertDonor = db.prepare(
-            'INSERT INTO donors (user_id, organization_name, organization_type, contact_person, phone, address, city) VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
-        insertDonor.run(result.lastInsertRowid, orgName, orgType, contactPerson, phone, address, city);
+        const userId = Number(insertUserResult.lastInsertRowid);
+
+        await db.execute({
+            sql: 'INSERT INTO donors (user_id, organization_name, organization_type, contact_person, phone, address, city) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            args: [userId, orgName, orgType, contactPerson, phone, address, city]
+        });
 
         res.json({ success: true, message: 'Registration successful! Your account is waiting for administrator verification.' });
     } catch (err) {
@@ -93,7 +101,7 @@ router.post('/api/auth/register-donor', isGuest, (req, res) => {
 });
 
 // POST /api/auth/register-ngo
-router.post('/api/auth/register-ngo', isGuest, (req, res) => {
+router.post('/api/auth/register-ngo', isGuest, async (req, res) => {
     try {
         const { ngoName, contactPerson, phone, email, address, city, registrationInfo, password, confirmPassword } = req.body;
 
@@ -119,21 +127,29 @@ router.post('/api/auth/register-ngo', isGuest, (req, res) => {
         }
 
         // Check for duplicate email
-        const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
-        if (existingUser) {
+        const existingResult = await db.execute({
+            sql: 'SELECT id FROM users WHERE email = ?',
+            args: [email.toLowerCase()]
+        });
+
+        if (existingResult.rows.length > 0) {
             return res.status(400).json({ error: 'An account with this email already exists.' });
         }
 
         // Hash password and create user
         const hashedPassword = bcrypt.hashSync(password, 10);
 
-        const insertUser = db.prepare('INSERT INTO users (email, password, role) VALUES (?, ?, ?)');
-        const result = insertUser.run(email.toLowerCase(), hashedPassword, 'ngo');
+        const insertUserResult = await db.execute({
+            sql: 'INSERT INTO users (email, password, role) VALUES (?, ?, ?)',
+            args: [email.toLowerCase(), hashedPassword, 'ngo']
+        });
 
-        const insertNgo = db.prepare(
-            'INSERT INTO ngos (user_id, ngo_name, contact_person, phone, address, city, registration_info) VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
-        insertNgo.run(result.lastInsertRowid, ngoName, contactPerson, phone, address, city, registrationInfo || '');
+        const userId = Number(insertUserResult.lastInsertRowid);
+
+        await db.execute({
+            sql: 'INSERT INTO ngos (user_id, ngo_name, contact_person, phone, address, city, registration_info) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            args: [userId, ngoName, contactPerson, phone, address, city, registrationInfo || '']
+        });
 
         res.json({ success: true, message: 'Registration successful! Your account is waiting for administrator verification.' });
     } catch (err) {
@@ -143,7 +159,7 @@ router.post('/api/auth/register-ngo', isGuest, (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/api/auth/login', isGuest, (req, res) => {
+router.post('/api/auth/login', isGuest, async (req, res) => {
     try {
         const { email, password } = req.body;
 
@@ -151,7 +167,13 @@ router.post('/api/auth/login', isGuest, (req, res) => {
             return res.status(400).json({ error: 'Email and password are required.' });
         }
 
-        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
+        const userResult = await db.execute({
+            sql: 'SELECT * FROM users WHERE email = ?',
+            args: [email.toLowerCase()]
+        });
+
+        const user = userResult.rows[0];
+
         if (!user) {
             return res.status(401).json({ error: 'Invalid email or password.' });
         }
@@ -175,13 +197,19 @@ router.post('/api/auth/login', isGuest, (req, res) => {
         let displayName = '';
 
         if (user.role === 'donor') {
-            const donor = db.prepare('SELECT * FROM donors WHERE user_id = ?').get(user.id);
+            const donorResult = await db.execute({
+                sql: 'SELECT * FROM donors WHERE user_id = ?',
+                args: [user.id]
+            });
+            const donor = donorResult.rows[0];
+
             if (!donor) {
                 return res.status(500).json({ error: 'Donor profile not found.' });
             }
             req.session.profileId = donor.id;
             req.session.displayName = donor.organization_name;
             displayName = donor.organization_name;
+
             if (donor.verification_status === 'PENDING') {
                 return res.json({ success: true, redirect: '/donor/pending', displayName, role: 'donor' });
             }
@@ -190,13 +218,19 @@ router.post('/api/auth/login', isGuest, (req, res) => {
             }
             redirectUrl = '/donor/dashboard';
         } else if (user.role === 'ngo') {
-            const ngo = db.prepare('SELECT * FROM ngos WHERE user_id = ?').get(user.id);
+            const ngoResult = await db.execute({
+                sql: 'SELECT * FROM ngos WHERE user_id = ?',
+                args: [user.id]
+            });
+            const ngo = ngoResult.rows[0];
+
             if (!ngo) {
                 return res.status(500).json({ error: 'NGO profile not found.' });
             }
             req.session.profileId = ngo.id;
             req.session.displayName = ngo.ngo_name;
             displayName = ngo.ngo_name;
+
             if (ngo.verification_status === 'PENDING') {
                 return res.json({ success: true, redirect: '/ngo/pending', displayName, role: 'ngo' });
             }

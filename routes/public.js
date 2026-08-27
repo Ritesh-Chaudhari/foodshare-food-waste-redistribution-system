@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const db = require('../config/database');
 const { CITY } = require('../config/city');
 const { isGuest } = require('../config/middleware');
@@ -6,46 +7,52 @@ const { isGuest } = require('../config/middleware');
 const router = express.Router();
 
 // Serve public HTML pages
-const path = require('path');
-
-// Serve public HTML pages
 router.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/pages/home.html'));
+    res.sendFile(path.join(__dirname, '../public/pages/home.html'));
 });
 
 router.get('/about', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/pages/about.html'));
+    res.sendFile(path.join(__dirname, '../public/pages/about.html'));
 });
 
 router.get('/how-it-works', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/pages/how-it-works.html'));
+    res.sendFile(path.join(__dirname, '../public/pages/how-it-works.html'));
 });
 
 router.get('/for-donors', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/pages/for-donors.html'));
+    res.sendFile(path.join(__dirname, '../public/pages/for-donors.html'));
 });
 
 router.get('/for-ngos', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/pages/for-ngos.html'));
+    res.sendFile(path.join(__dirname, '../public/pages/for-ngos.html'));
 });
 
 // API: Public stats
-router.get('/api/public/stats', (req, res) => {
+router.get('/api/public/stats', async (req, res) => {
     try {
         // Expire overdue donations first
-        db.prepare(`
+        await db.execute(`
             UPDATE donations SET status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP
             WHERE status = 'AVAILABLE' AND pickup_deadline < CURRENT_TIMESTAMP
-        `).run();
+        `);
+
+        const [totalDonationsRes, completedDonationsRes, totalNgosRes, totalDonorsRes] = await Promise.all([
+            db.execute("SELECT COUNT(*) as count FROM donations"),
+            db.execute("SELECT COUNT(*) as count FROM donations WHERE status IN ('COMPLETED', 'COLLECTED')"),
+            db.execute("SELECT COUNT(*) as count FROM ngos WHERE verification_status = 'APPROVED'"),
+            db.execute("SELECT COUNT(*) as count FROM donors WHERE verification_status = 'APPROVED'")
+        ]);
 
         const stats = {
-            totalDonations: db.prepare("SELECT COUNT(*) as count FROM donations").get().count,
-            completedDonations: db.prepare("SELECT COUNT(*) as count FROM donations WHERE status IN ('COMPLETED', 'COLLECTED')").get().count,
-            totalNgos: db.prepare("SELECT COUNT(*) as count FROM ngos WHERE verification_status = 'APPROVED'").get().count,
-            totalDonors: db.prepare("SELECT COUNT(*) as count FROM donors WHERE verification_status = 'APPROVED'").get().count
+            totalDonations: Number(totalDonationsRes.rows[0]?.count || 0),
+            completedDonations: Number(completedDonationsRes.rows[0]?.count || 0),
+            totalNgos: Number(totalNgosRes.rows[0]?.count || 0),
+            totalDonors: Number(totalDonorsRes.rows[0]?.count || 0)
         };
+
         res.json(stats);
     } catch (err) {
+        console.error('Public stats error:', err);
         res.json({ totalDonations: 0, completedDonations: 0, totalNgos: 0, totalDonors: 0 });
     }
 });

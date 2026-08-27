@@ -41,25 +41,60 @@ router.get('/admin/reports', isAdmin, (req, res) => {
 // --- API Routes ---
 
 // GET /api/admin/dashboard-stats
-router.get('/api/admin/dashboard-stats', isAdmin, (req, res) => {
+router.get('/api/admin/dashboard-stats', isAdmin, async (req, res) => {
     try {
+        const [
+            totalDonorsRes,
+            pendingDonorsRes,
+            approvedDonorsRes,
+            totalNgosRes,
+            pendingNgosRes,
+            approvedNgosRes,
+            availableDonationsRes,
+            requestedDonationsRes,
+            confirmedDonationsRes,
+            collectedDonationsRes,
+            completedDonationsRes,
+            expiredDonationsRes,
+            totalDonationsRes,
+            totalRequestsRes,
+            pendingRequestsRes
+        ] = await Promise.all([
+            db.execute("SELECT COUNT(*) as count FROM donors"),
+            db.execute("SELECT COUNT(*) as count FROM donors WHERE verification_status = 'PENDING'"),
+            db.execute("SELECT COUNT(*) as count FROM donors WHERE verification_status = 'APPROVED'"),
+            db.execute("SELECT COUNT(*) as count FROM ngos"),
+            db.execute("SELECT COUNT(*) as count FROM ngos WHERE verification_status = 'PENDING'"),
+            db.execute("SELECT COUNT(*) as count FROM ngos WHERE verification_status = 'APPROVED'"),
+            db.execute("SELECT COUNT(*) as count FROM donations WHERE status = 'AVAILABLE'"),
+            db.execute("SELECT COUNT(*) as count FROM donations WHERE status = 'REQUESTED'"),
+            db.execute("SELECT COUNT(*) as count FROM donations WHERE status = 'CONFIRMED'"),
+            db.execute("SELECT COUNT(*) as count FROM donations WHERE status = 'COLLECTED'"),
+            db.execute("SELECT COUNT(*) as count FROM donations WHERE status = 'COMPLETED'"),
+            db.execute("SELECT COUNT(*) as count FROM donations WHERE status = 'EXPIRED'"),
+            db.execute("SELECT COUNT(*) as count FROM donations"),
+            db.execute("SELECT COUNT(*) as count FROM donation_requests"),
+            db.execute("SELECT COUNT(*) as count FROM donation_requests WHERE status = 'PENDING'")
+        ]);
+
         const stats = {
-            totalDonors: db.prepare("SELECT COUNT(*) as count FROM donors").get().count,
-            pendingDonors: db.prepare("SELECT COUNT(*) as count FROM donors WHERE verification_status = 'PENDING'").get().count,
-            approvedDonors: db.prepare("SELECT COUNT(*) as count FROM donors WHERE verification_status = 'APPROVED'").get().count,
-            totalNgos: db.prepare("SELECT COUNT(*) as count FROM ngos").get().count,
-            pendingNgos: db.prepare("SELECT COUNT(*) as count FROM ngos WHERE verification_status = 'PENDING'").get().count,
-            approvedNgos: db.prepare("SELECT COUNT(*) as count FROM ngos WHERE verification_status = 'APPROVED'").get().count,
-            availableDonations: db.prepare("SELECT COUNT(*) as count FROM donations WHERE status = 'AVAILABLE'").get().count,
-            requestedDonations: db.prepare("SELECT COUNT(*) as count FROM donations WHERE status = 'REQUESTED'").get().count,
-            confirmedDonations: db.prepare("SELECT COUNT(*) as count FROM donations WHERE status = 'CONFIRMED'").get().count,
-            collectedDonations: db.prepare("SELECT COUNT(*) as count FROM donations WHERE status = 'COLLECTED'").get().count,
-            completedDonations: db.prepare("SELECT COUNT(*) as count FROM donations WHERE status = 'COMPLETED'").get().count,
-            expiredDonations: db.prepare("SELECT COUNT(*) as count FROM donations WHERE status = 'EXPIRED'").get().count,
-            totalDonations: db.prepare("SELECT COUNT(*) as count FROM donations").get().count,
-            totalRequests: db.prepare("SELECT COUNT(*) as count FROM donation_requests").get().count,
-            pendingRequests: db.prepare("SELECT COUNT(*) as count FROM donation_requests WHERE status = 'PENDING'").get().count
+            totalDonors: Number(totalDonorsRes.rows[0]?.count || 0),
+            pendingDonors: Number(pendingDonorsRes.rows[0]?.count || 0),
+            approvedDonors: Number(approvedDonorsRes.rows[0]?.count || 0),
+            totalNgos: Number(totalNgosRes.rows[0]?.count || 0),
+            pendingNgos: Number(pendingNgosRes.rows[0]?.count || 0),
+            approvedNgos: Number(approvedNgosRes.rows[0]?.count || 0),
+            availableDonations: Number(availableDonationsRes.rows[0]?.count || 0),
+            requestedDonations: Number(requestedDonationsRes.rows[0]?.count || 0),
+            confirmedDonations: Number(confirmedDonationsRes.rows[0]?.count || 0),
+            collectedDonations: Number(collectedDonationsRes.rows[0]?.count || 0),
+            completedDonations: Number(completedDonationsRes.rows[0]?.count || 0),
+            expiredDonations: Number(expiredDonationsRes.rows[0]?.count || 0),
+            totalDonations: Number(totalDonationsRes.rows[0]?.count || 0),
+            totalRequests: Number(totalRequestsRes.rows[0]?.count || 0),
+            pendingRequests: Number(pendingRequestsRes.rows[0]?.count || 0)
         };
+
         res.json(stats);
     } catch (err) {
         console.error('Admin dashboard stats error:', err);
@@ -70,7 +105,7 @@ router.get('/api/admin/dashboard-stats', isAdmin, (req, res) => {
 // --- Donor Management ---
 
 // GET /api/admin/donors
-router.get('/api/admin/donors', isAdmin, (req, res) => {
+router.get('/api/admin/donors', isAdmin, async (req, res) => {
     try {
         const status = req.query.status;
         let query = `
@@ -87,8 +122,12 @@ router.get('/api/admin/donors', isAdmin, (req, res) => {
 
         query += ' ORDER BY d.created_at DESC';
 
-        const donors = db.prepare(query).all(...params);
-        res.json(donors);
+        const result = await db.execute({
+            sql: query,
+            args: params
+        });
+
+        res.json(result.rows);
     } catch (err) {
         console.error('Admin get donors error:', err);
         res.status(500).json({ error: 'Failed to load donors.' });
@@ -96,14 +135,19 @@ router.get('/api/admin/donors', isAdmin, (req, res) => {
 });
 
 // GET /api/admin/donors/:id
-router.get('/api/admin/donors/:id', isAdmin, (req, res) => {
+router.get('/api/admin/donors/:id', isAdmin, async (req, res) => {
     try {
-        const donor = db.prepare(`
-            SELECT d.*, u.email, u.is_active
-            FROM donors d
-            JOIN users u ON d.user_id = u.id
-            WHERE d.id = ?
-        `).get(req.params.id);
+        const result = await db.execute({
+            sql: `
+                SELECT d.*, u.email, u.is_active
+                FROM donors d
+                JOIN users u ON d.user_id = u.id
+                WHERE d.id = ?
+            `,
+            args: [req.params.id]
+        });
+
+        const donor = result.rows[0];
 
         if (!donor) {
             return res.status(404).json({ error: 'Donor not found.' });
@@ -117,14 +161,23 @@ router.get('/api/admin/donors/:id', isAdmin, (req, res) => {
 });
 
 // POST /api/admin/donors/:id/approve
-router.post('/api/admin/donors/:id/approve', isAdmin, (req, res) => {
+router.post('/api/admin/donors/:id/approve', isAdmin, async (req, res) => {
     try {
-        const donor = db.prepare('SELECT * FROM donors WHERE id = ?').get(req.params.id);
+        const result = await db.execute({
+            sql: 'SELECT * FROM donors WHERE id = ?',
+            args: [req.params.id]
+        });
+
+        const donor = result.rows[0];
         if (!donor) {
             return res.status(404).json({ error: 'Donor not found.' });
         }
 
-        db.prepare("UPDATE donors SET verification_status = 'APPROVED' WHERE id = ?").run(req.params.id);
+        await db.execute({
+            sql: "UPDATE donors SET verification_status = 'APPROVED' WHERE id = ?",
+            args: [req.params.id]
+        });
+
         res.json({ success: true, message: 'Donor approved successfully.' });
     } catch (err) {
         console.error('Approve donor error:', err);
@@ -133,14 +186,22 @@ router.post('/api/admin/donors/:id/approve', isAdmin, (req, res) => {
 });
 
 // POST /api/admin/donors/:id/reject
-router.post('/api/admin/donors/:id/reject', isAdmin, (req, res) => {
+router.post('/api/admin/donors/:id/reject', isAdmin, async (req, res) => {
     try {
-        const donor = db.prepare('SELECT * FROM donors WHERE id = ?').get(req.params.id);
+        const result = await db.execute({
+            sql: 'SELECT * FROM donors WHERE id = ?',
+            args: [req.params.id]
+        });
+
+        const donor = result.rows[0];
         if (!donor) {
             return res.status(404).json({ error: 'Donor not found.' });
         }
 
-        db.prepare("UPDATE donors SET verification_status = 'REJECTED' WHERE id = ?").run(req.params.id);
+        await db.execute({
+            sql: "UPDATE donors SET verification_status = 'REJECTED' WHERE id = ?",
+            args: [req.params.id]
+        });
 
         res.json({ success: true, message: 'Donor rejected.' });
     } catch (err) {
@@ -150,17 +211,31 @@ router.post('/api/admin/donors/:id/reject', isAdmin, (req, res) => {
 });
 
 // POST /api/admin/donors/:id/toggle-active
-router.post('/api/admin/donors/:id/toggle-active', isAdmin, (req, res) => {
+router.post('/api/admin/donors/:id/toggle-active', isAdmin, async (req, res) => {
     try {
-        const donor = db.prepare('SELECT user_id FROM donors WHERE id = ?').get(req.params.id);
+        const donorResult = await db.execute({
+            sql: 'SELECT user_id FROM donors WHERE id = ?',
+            args: [req.params.id]
+        });
+
+        const donor = donorResult.rows[0];
         if (!donor) {
             return res.status(404).json({ error: 'Donor not found.' });
         }
 
-        const user = db.prepare('SELECT is_active FROM users WHERE id = ?').get(donor.user_id);
+        const userResult = await db.execute({
+            sql: 'SELECT is_active FROM users WHERE id = ?',
+            args: [donor.user_id]
+        });
+
+        const user = userResult.rows[0];
         const newStatus = user.is_active ? 0 : 1;
 
-        db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newStatus, donor.user_id);
+        await db.execute({
+            sql: 'UPDATE users SET is_active = ? WHERE id = ?',
+            args: [newStatus, donor.user_id]
+        });
+
         res.json({ success: true, message: newStatus ? 'Account activated.' : 'Account deactivated.' });
     } catch (err) {
         console.error('Toggle donor active error:', err);
@@ -171,7 +246,7 @@ router.post('/api/admin/donors/:id/toggle-active', isAdmin, (req, res) => {
 // --- NGO Management ---
 
 // GET /api/admin/ngos
-router.get('/api/admin/ngos', isAdmin, (req, res) => {
+router.get('/api/admin/ngos', isAdmin, async (req, res) => {
     try {
         const status = req.query.status;
         let query = `
@@ -188,8 +263,12 @@ router.get('/api/admin/ngos', isAdmin, (req, res) => {
 
         query += ' ORDER BY ng.created_at DESC';
 
-        const ngos = db.prepare(query).all(...params);
-        res.json(ngos);
+        const result = await db.execute({
+            sql: query,
+            args: params
+        });
+
+        res.json(result.rows);
     } catch (err) {
         console.error('Admin get ngos error:', err);
         res.status(500).json({ error: 'Failed to load NGOs.' });
@@ -197,14 +276,19 @@ router.get('/api/admin/ngos', isAdmin, (req, res) => {
 });
 
 // GET /api/admin/ngos/:id
-router.get('/api/admin/ngos/:id', isAdmin, (req, res) => {
+router.get('/api/admin/ngos/:id', isAdmin, async (req, res) => {
     try {
-        const ngo = db.prepare(`
-            SELECT ng.*, u.email, u.is_active
-            FROM ngos ng
-            JOIN users u ON ng.user_id = u.id
-            WHERE ng.id = ?
-        `).get(req.params.id);
+        const result = await db.execute({
+            sql: `
+                SELECT ng.*, u.email, u.is_active
+                FROM ngos ng
+                JOIN users u ON ng.user_id = u.id
+                WHERE ng.id = ?
+            `,
+            args: [req.params.id]
+        });
+
+        const ngo = result.rows[0];
 
         if (!ngo) {
             return res.status(404).json({ error: 'NGO not found.' });
@@ -218,14 +302,23 @@ router.get('/api/admin/ngos/:id', isAdmin, (req, res) => {
 });
 
 // POST /api/admin/ngos/:id/approve
-router.post('/api/admin/ngos/:id/approve', isAdmin, (req, res) => {
+router.post('/api/admin/ngos/:id/approve', isAdmin, async (req, res) => {
     try {
-        const ngo = db.prepare('SELECT * FROM ngos WHERE id = ?').get(req.params.id);
+        const result = await db.execute({
+            sql: 'SELECT * FROM ngos WHERE id = ?',
+            args: [req.params.id]
+        });
+
+        const ngo = result.rows[0];
         if (!ngo) {
             return res.status(404).json({ error: 'NGO not found.' });
         }
 
-        db.prepare("UPDATE ngos SET verification_status = 'APPROVED' WHERE id = ?").run(req.params.id);
+        await db.execute({
+            sql: "UPDATE ngos SET verification_status = 'APPROVED' WHERE id = ?",
+            args: [req.params.id]
+        });
+
         res.json({ success: true, message: 'NGO approved successfully.' });
     } catch (err) {
         console.error('Approve ngo error:', err);
@@ -234,14 +327,22 @@ router.post('/api/admin/ngos/:id/approve', isAdmin, (req, res) => {
 });
 
 // POST /api/admin/ngos/:id/reject
-router.post('/api/admin/ngos/:id/reject', isAdmin, (req, res) => {
+router.post('/api/admin/ngos/:id/reject', isAdmin, async (req, res) => {
     try {
-        const ngo = db.prepare('SELECT * FROM ngos WHERE id = ?').get(req.params.id);
+        const result = await db.execute({
+            sql: 'SELECT * FROM ngos WHERE id = ?',
+            args: [req.params.id]
+        });
+
+        const ngo = result.rows[0];
         if (!ngo) {
             return res.status(404).json({ error: 'NGO not found.' });
         }
 
-        db.prepare("UPDATE ngos SET verification_status = 'REJECTED' WHERE id = ?").run(req.params.id);
+        await db.execute({
+            sql: "UPDATE ngos SET verification_status = 'REJECTED' WHERE id = ?",
+            args: [req.params.id]
+        });
 
         res.json({ success: true, message: 'NGO rejected.' });
     } catch (err) {
@@ -251,17 +352,31 @@ router.post('/api/admin/ngos/:id/reject', isAdmin, (req, res) => {
 });
 
 // POST /api/admin/ngos/:id/toggle-active
-router.post('/api/admin/ngos/:id/toggle-active', isAdmin, (req, res) => {
+router.post('/api/admin/ngos/:id/toggle-active', isAdmin, async (req, res) => {
     try {
-        const ngo = db.prepare('SELECT user_id FROM ngos WHERE id = ?').get(req.params.id);
+        const ngoResult = await db.execute({
+            sql: 'SELECT user_id FROM ngos WHERE id = ?',
+            args: [req.params.id]
+        });
+
+        const ngo = ngoResult.rows[0];
         if (!ngo) {
             return res.status(404).json({ error: 'NGO not found.' });
         }
 
-        const user = db.prepare('SELECT is_active FROM users WHERE id = ?').get(ngo.user_id);
+        const userResult = await db.execute({
+            sql: 'SELECT is_active FROM users WHERE id = ?',
+            args: [ngo.user_id]
+        });
+
+        const user = userResult.rows[0];
         const newStatus = user.is_active ? 0 : 1;
 
-        db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newStatus, ngo.user_id);
+        await db.execute({
+            sql: 'UPDATE users SET is_active = ? WHERE id = ?',
+            args: [newStatus, ngo.user_id]
+        });
+
         res.json({ success: true, message: newStatus ? 'Account activated.' : 'Account deactivated.' });
     } catch (err) {
         console.error('Toggle ngo active error:', err);
@@ -272,7 +387,7 @@ router.post('/api/admin/ngos/:id/toggle-active', isAdmin, (req, res) => {
 // --- Donation Monitoring ---
 
 // GET /api/admin/donations
-router.get('/api/admin/donations', isAdmin, (req, res) => {
+router.get('/api/admin/donations', isAdmin, async (req, res) => {
     try {
         const status = req.query.status;
         let query = `
@@ -291,8 +406,12 @@ router.get('/api/admin/donations', isAdmin, (req, res) => {
 
         query += ' ORDER BY d.created_at DESC';
 
-        const donations = db.prepare(query).all(...params);
-        res.json(donations);
+        const result = await db.execute({
+            sql: query,
+            args: params
+        });
+
+        res.json(result.rows);
     } catch (err) {
         console.error('Admin get donations error:', err);
         res.status(500).json({ error: 'Failed to load donations.' });
@@ -302,30 +421,30 @@ router.get('/api/admin/donations', isAdmin, (req, res) => {
 // --- Users Management (combined view) ---
 
 // GET /api/admin/users
-router.get('/api/admin/users', isAdmin, (req, res) => {
+router.get('/api/admin/users', isAdmin, async (req, res) => {
     try {
         const role = req.query.role;
-        let users;
+        let result;
         if (role === 'donor') {
-            users = db.prepare(`
+            result = await db.execute(`
                 SELECT u.id, u.email, u.role, u.is_active, u.created_at,
                        d.id as profile_id, d.organization_name, d.organization_type, d.contact_person, d.phone, d.city, d.verification_status
                 FROM users u
                 JOIN donors d ON u.id = d.user_id
                 WHERE u.role = 'donor'
                 ORDER BY u.created_at DESC
-            `).all();
+            `);
         } else if (role === 'ngo') {
-            users = db.prepare(`
+            result = await db.execute(`
                 SELECT u.id, u.email, u.role, u.is_active, u.created_at,
                        n.id as profile_id, n.ngo_name, n.contact_person, n.phone, n.city, n.verification_status
                 FROM users u
                 JOIN ngos n ON u.id = n.user_id
                 WHERE u.role = 'ngo'
                 ORDER BY u.created_at DESC
-            `).all();
+            `);
         } else {
-            users = db.prepare(`
+            result = await db.execute(`
                 SELECT u.id, u.email, u.role, u.is_active, u.created_at,
                        COALESCE(d.organization_name, n.ngo_name) as name,
                        COALESCE(d.organization_type, 'NGO') as type,
@@ -337,9 +456,9 @@ router.get('/api/admin/users', isAdmin, (req, res) => {
                 LEFT JOIN donors d ON u.id = d.user_id
                 LEFT JOIN ngos n ON u.id = n.user_id
                 ORDER BY u.created_at DESC
-            `).all();
+            `);
         }
-        res.json(users);
+        res.json(result.rows);
     } catch (err) {
         console.error('Admin get users error:', err);
         res.status(500).json({ error: 'Failed to load users.' });
@@ -349,9 +468,9 @@ router.get('/api/admin/users', isAdmin, (req, res) => {
 // --- Requests Overview ---
 
 // GET /api/admin/requests
-router.get('/api/admin/requests', isAdmin, (req, res) => {
+router.get('/api/admin/requests', isAdmin, async (req, res) => {
     try {
-        const requests = db.prepare(`
+        const result = await db.execute(`
             SELECT dr.*, d.food_description, d.quantity, d.status as donation_status, d.pickup_location, d.pickup_deadline,
                    dorg.organization_name as donor_name, dorg.organization_type as donor_type,
                    ng.ngo_name, ng.contact_person as ngo_contact, ng.phone as ngo_phone
@@ -360,8 +479,8 @@ router.get('/api/admin/requests', isAdmin, (req, res) => {
             JOIN donors dorg ON d.donor_id = dorg.id
             JOIN ngos ng ON dr.ngo_id = ng.id
             ORDER BY dr.requested_at DESC
-        `).all();
-        res.json(requests);
+        `);
+        res.json(result.rows);
     } catch (err) {
         console.error('Admin get requests error:', err);
         res.status(500).json({ error: 'Failed to load requests.' });
@@ -371,34 +490,43 @@ router.get('/api/admin/requests', isAdmin, (req, res) => {
 // --- Reports/Overview ---
 
 // GET /api/admin/reports
-router.get('/api/admin/reports', isAdmin, (req, res) => {
+router.get('/api/admin/reports', isAdmin, async (req, res) => {
     try {
-        const reports = {
-            donorsByType: db.prepare(`
-                SELECT organization_type, COUNT(*) as count FROM donors GROUP BY organization_type
-            `).all(),
-            donationsByStatus: db.prepare(`
-                SELECT status, COUNT(*) as count FROM donations GROUP BY status
-            `).all(),
-            requestsByStatus: db.prepare(`
-                SELECT status, COUNT(*) as count FROM donation_requests GROUP BY status
-            `).all(),
-            recentDonations: db.prepare(`
+        const [
+            donorsByTypeRes,
+            donationsByStatusRes,
+            requestsByStatusRes,
+            recentDonationsRes,
+            recentRequestsRes
+        ] = await Promise.all([
+            db.execute("SELECT organization_type, COUNT(*) as count FROM donors GROUP BY organization_type"),
+            db.execute("SELECT status, COUNT(*) as count FROM donations GROUP BY status"),
+            db.execute("SELECT status, COUNT(*) as count FROM donation_requests GROUP BY status"),
+            db.execute(`
                 SELECT d.id, d.food_description, d.quantity, d.status, d.created_at,
                        dorg.organization_name as donor_name
                 FROM donations d
                 JOIN donors dorg ON d.donor_id = dorg.id
                 ORDER BY d.created_at DESC LIMIT 10
-            `).all(),
-            recentRequests: db.prepare(`
+            `),
+            db.execute(`
                 SELECT dr.id, dr.status, dr.requested_at,
                        d.food_description, ng.ngo_name
                 FROM donation_requests dr
                 JOIN donations d ON dr.donation_id = d.id
                 JOIN ngos ng ON dr.ngo_id = ng.id
                 ORDER BY dr.requested_at DESC LIMIT 10
-            `).all()
+            `)
+        ]);
+
+        const reports = {
+            donorsByType: donorsByTypeRes.rows,
+            donationsByStatus: donationsByStatusRes.rows,
+            requestsByStatus: requestsByStatusRes.rows,
+            recentDonations: recentDonationsRes.rows,
+            recentRequests: recentRequestsRes.rows
         };
+
         res.json(reports);
     } catch (err) {
         console.error('Admin reports error:', err);

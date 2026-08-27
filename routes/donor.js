@@ -48,22 +48,55 @@ router.get('/donor/rejected', isDonor, (req, res) => {
 // --- API Routes ---
 
 // GET /api/donor/dashboard-stats
-router.get('/api/donor/dashboard-stats', isDonor, (req, res) => {
+router.get('/api/donor/dashboard-stats', isDonor, async (req, res) => {
     try {
         const donorId = req.session.profileId;
+
+        const [activeRes, pendingRes, confirmedRes, collectedRes, completedRes, expiredRes, totalRes] = await Promise.all([
+            db.execute({
+                sql: "SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status = 'AVAILABLE'",
+                args: [donorId]
+            }),
+            db.execute({
+                sql: `
+                    SELECT COUNT(*) as count FROM donation_requests dr
+                    JOIN donations d ON dr.donation_id = d.id
+                    WHERE d.donor_id = ? AND dr.status = 'PENDING'
+                `,
+                args: [donorId]
+            }),
+            db.execute({
+                sql: "SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status = 'CONFIRMED'",
+                args: [donorId]
+            }),
+            db.execute({
+                sql: "SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status = 'COLLECTED'",
+                args: [donorId]
+            }),
+            db.execute({
+                sql: "SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status IN ('COMPLETED', 'COLLECTED')",
+                args: [donorId]
+            }),
+            db.execute({
+                sql: "SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status = 'EXPIRED'",
+                args: [donorId]
+            }),
+            db.execute({
+                sql: "SELECT COUNT(*) as count FROM donations WHERE donor_id = ?",
+                args: [donorId]
+            })
+        ]);
+
         const stats = {
-            active: db.prepare("SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status = 'AVAILABLE'").get(donorId).count,
-            pendingRequests: db.prepare(`
-                SELECT COUNT(*) as count FROM donation_requests dr
-                JOIN donations d ON dr.donation_id = d.id
-                WHERE d.donor_id = ? AND dr.status = 'PENDING'
-            `).get(donorId).count,
-            confirmed: db.prepare("SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status = 'CONFIRMED'").get(donorId).count,
-            collected: db.prepare("SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status = 'COLLECTED'").get(donorId).count,
-            completed: db.prepare("SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status IN ('COMPLETED', 'COLLECTED')").get(donorId).count,
-            expired: db.prepare("SELECT COUNT(*) as count FROM donations WHERE donor_id = ? AND status = 'EXPIRED'").get(donorId).count,
-            total: db.prepare("SELECT COUNT(*) as count FROM donations WHERE donor_id = ?").get(donorId).count
+            active: Number(activeRes.rows[0]?.count || 0),
+            pendingRequests: Number(pendingRes.rows[0]?.count || 0),
+            confirmed: Number(confirmedRes.rows[0]?.count || 0),
+            collected: Number(collectedRes.rows[0]?.count || 0),
+            completed: Number(completedRes.rows[0]?.count || 0),
+            expired: Number(expiredRes.rows[0]?.count || 0),
+            total: Number(totalRes.rows[0]?.count || 0)
         };
+
         res.json(stats);
     } catch (err) {
         console.error('Dashboard stats error:', err);
@@ -72,12 +105,17 @@ router.get('/api/donor/dashboard-stats', isDonor, (req, res) => {
 });
 
 // POST /api/donor/donations
-router.post('/api/donor/donations', isDonor, (req, res) => {
+router.post('/api/donor/donations', isDonor, async (req, res) => {
     try {
         const donorId = req.session.profileId;
 
         // Check if donor is approved
-        const donor = db.prepare("SELECT verification_status FROM donors WHERE id = ?").get(donorId);
+        const donorRes = await db.execute({
+            sql: "SELECT verification_status FROM donors WHERE id = ?",
+            args: [donorId]
+        });
+        const donor = donorRes.rows[0];
+
         if (!donor || donor.verification_status !== 'APPROVED') {
             return res.status(403).json({ error: 'Your account must be approved before creating donations.' });
         }
@@ -103,29 +141,29 @@ router.post('/api/donor/donations', isDonor, (req, res) => {
             return res.status(400).json({ error: 'Please enter a valid pickup deadline.' });
         }
 
-        const donorInfo = db.prepare("SELECT address, city FROM donors WHERE id = ?").get(donorId);
         const fullPickupLocation = pickupLocation;
 
-        const insert = db.prepare(`
-            INSERT INTO donations (donor_id, food_description, quantity, food_category, preparation_time, pickup_location, pickup_deadline, additional_notes, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE')
-        `);
-
-        const result = insert.run(
-            donorId,
-            foodDescription.trim(),
-            quantity.trim(),
-            foodCategory || 'General',
-            preparationTime || '',
-            fullPickupLocation.trim(),
-            deadline.toISOString(),
-            additionalNotes || ''
-        );
+        const result = await db.execute({
+            sql: `
+                INSERT INTO donations (donor_id, food_description, quantity, food_category, preparation_time, pickup_location, pickup_deadline, additional_notes, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE')
+            `,
+            args: [
+                donorId,
+                foodDescription.trim(),
+                quantity.trim(),
+                foodCategory || 'General',
+                preparationTime || '',
+                fullPickupLocation.trim(),
+                deadline.toISOString(),
+                additionalNotes || ''
+            ]
+        });
 
         res.json({
             success: true,
             message: 'Donation created successfully.',
-            donationId: result.lastInsertRowid
+            donationId: Number(result.lastInsertRowid)
         });
     } catch (err) {
         console.error('Create donation error:', err);
@@ -134,7 +172,7 @@ router.post('/api/donor/donations', isDonor, (req, res) => {
 });
 
 // GET /api/donor/donations
-router.get('/api/donor/donations', isDonor, (req, res) => {
+router.get('/api/donor/donations', isDonor, async (req, res) => {
     try {
         const donorId = req.session.profileId;
         const status = req.query.status;
@@ -161,8 +199,12 @@ router.get('/api/donor/donations', isDonor, (req, res) => {
 
         query += ' ORDER BY d.created_at DESC';
 
-        const donations = db.prepare(query).all(...params);
-        res.json(donations);
+        const result = await db.execute({
+            sql: query,
+            args: params
+        });
+
+        res.json(result.rows);
     } catch (err) {
         console.error('Get donations error:', err);
         res.status(500).json({ error: 'Failed to load donations.' });
@@ -170,10 +212,15 @@ router.get('/api/donor/donations', isDonor, (req, res) => {
 });
 
 // GET /api/donor/donations/:id
-router.get('/api/donor/donations/:id', isDonor, (req, res) => {
+router.get('/api/donor/donations/:id', isDonor, async (req, res) => {
     try {
         const donorId = req.session.profileId;
-        const donation = db.prepare('SELECT * FROM donations WHERE id = ? AND donor_id = ?').get(req.params.id, donorId);
+        const result = await db.execute({
+            sql: 'SELECT * FROM donations WHERE id = ? AND donor_id = ?',
+            args: [req.params.id, donorId]
+        });
+
+        const donation = result.rows[0];
 
         if (!donation) {
             return res.status(404).json({ error: 'Donation not found.' });
@@ -187,21 +234,24 @@ router.get('/api/donor/donations/:id', isDonor, (req, res) => {
 });
 
 // GET /api/donor/requests - get all requests for donor's donations
-router.get('/api/donor/requests', isDonor, (req, res) => {
+router.get('/api/donor/requests', isDonor, async (req, res) => {
     try {
         const donorId = req.session.profileId;
 
-        const requests = db.prepare(`
-            SELECT dr.*, d.food_description, d.quantity, d.status as donation_status, d.pickup_location, d.pickup_deadline,
-                   ng.ngo_name, ng.contact_person, ng.phone as ngo_phone, ng.address as ngo_address, ng.registration_info
-            FROM donation_requests dr
-            JOIN donations d ON dr.donation_id = d.id
-            JOIN ngos ng ON dr.ngo_id = ng.id
-            WHERE d.donor_id = ?
-            ORDER BY dr.requested_at DESC
-        `).all(donorId);
+        const result = await db.execute({
+            sql: `
+                SELECT dr.*, d.food_description, d.quantity, d.status as donation_status, d.pickup_location, d.pickup_deadline,
+                       ng.ngo_name, ng.contact_person, ng.phone as ngo_phone, ng.address as ngo_address, ng.registration_info
+                FROM donation_requests dr
+                JOIN donations d ON dr.donation_id = d.id
+                JOIN ngos ng ON dr.ngo_id = ng.id
+                WHERE d.donor_id = ?
+                ORDER BY dr.requested_at DESC
+            `,
+            args: [donorId]
+        });
 
-        res.json(requests);
+        res.json(result.rows);
     } catch (err) {
         console.error('Get requests error:', err);
         res.status(500).json({ error: 'Failed to load requests.' });
@@ -209,45 +259,55 @@ router.get('/api/donor/requests', isDonor, (req, res) => {
 });
 
 // POST /api/donor/requests/:id/accept
-router.post('/api/donor/requests/:id/accept', isDonor, (req, res) => {
+router.post('/api/donor/requests/:id/accept', isDonor, async (req, res) => {
     try {
         const donorId = req.session.profileId;
         const requestId = req.params.id;
 
         // Get the request with donation info
-        const request = db.prepare(`
-            SELECT dr.*, d.donor_id, d.status as donation_status
-            FROM donation_requests dr
-            JOIN donations d ON dr.donation_id = d.id
-            WHERE dr.id = ?
-        `).get(requestId);
+        const result = await db.execute({
+            sql: `
+                SELECT dr.*, d.donor_id, d.status as donation_status
+                FROM donation_requests dr
+                JOIN donations d ON dr.donation_id = d.id
+                WHERE dr.id = ?
+            `,
+            args: [requestId]
+        });
+
+        const request = result.rows[0];
 
         if (!request) {
             return res.status(404).json({ error: 'Request not found.' });
         }
 
-        if (request.donor_id !== donorId) {
+        if (Number(request.donor_id) !== Number(donorId)) {
             return res.status(403).json({ error: 'You can only manage requests for your own donations.' });
-        }            if (request.donation_status !== 'AVAILABLE' && request.donation_status !== 'REQUESTED') {
-                return res.status(400).json({ error: 'This donation is no longer available for requests.' });
+        }
+
+        if (request.donation_status !== 'AVAILABLE' && request.donation_status !== 'REQUESTED') {
+            return res.status(400).json({ error: 'This donation is no longer available for requests.' });
+        }
+
+        if (request.status !== 'PENDING') {
+            return res.status(400).json({ error: 'This request has already been processed.' });
+        }
+
+        // Execute batch/transaction operations for Turso
+        await db.batch([
+            {
+                sql: "UPDATE donation_requests SET status = 'ACCEPTED', responded_at = CURRENT_TIMESTAMP WHERE id = ?",
+                args: [requestId]
+            },
+            {
+                sql: "UPDATE donation_requests SET status = 'REJECTED', responded_at = CURRENT_TIMESTAMP WHERE donation_id = ? AND id != ? AND status = 'PENDING'",
+                args: [request.donation_id, requestId]
+            },
+            {
+                sql: "UPDATE donations SET status = 'CONFIRMED', confirmed_ngo_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                args: [request.ngo_id, request.donation_id]
             }
-
-            if (request.status !== 'PENDING') {
-                return res.status(400).json({ error: 'This request has already been processed.' });
-            }
-
-            const acceptTransaction = db.transaction(() => {
-                // Accept this request
-                db.prepare("UPDATE donation_requests SET status = 'ACCEPTED', responded_at = CURRENT_TIMESTAMP WHERE id = ?").run(requestId);
-
-                // Reject all other pending requests for this donation
-                db.prepare("UPDATE donation_requests SET status = 'REJECTED', responded_at = CURRENT_TIMESTAMP WHERE donation_id = ? AND id != ? AND status = 'PENDING'").run(request.donation_id, requestId);
-
-                // Update donation status to CONFIRMED and set confirmed NGO
-                db.prepare("UPDATE donations SET status = 'CONFIRMED', confirmed_ngo_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(request.ngo_id, request.donation_id);
-            });
-
-        acceptTransaction();
+        ]);
 
         res.json({ success: true, message: 'NGO request confirmed successfully.' });
     } catch (err) {
@@ -257,23 +317,28 @@ router.post('/api/donor/requests/:id/accept', isDonor, (req, res) => {
 });
 
 // POST /api/donor/requests/:id/reject
-router.post('/api/donor/requests/:id/reject', isDonor, (req, res) => {
+router.post('/api/donor/requests/:id/reject', isDonor, async (req, res) => {
     try {
         const donorId = req.session.profileId;
         const requestId = req.params.id;
 
-        const request = db.prepare(`
-            SELECT dr.*, d.donor_id
-            FROM donation_requests dr
-            JOIN donations d ON dr.donation_id = d.id
-            WHERE dr.id = ?
-        `).get(requestId);
+        const result = await db.execute({
+            sql: `
+                SELECT dr.*, d.donor_id
+                FROM donation_requests dr
+                JOIN donations d ON dr.donation_id = d.id
+                WHERE dr.id = ?
+            `,
+            args: [requestId]
+        });
+
+        const request = result.rows[0];
 
         if (!request) {
             return res.status(404).json({ error: 'Request not found.' });
         }
 
-        if (request.donor_id !== donorId) {
+        if (Number(request.donor_id) !== Number(donorId)) {
             return res.status(403).json({ error: 'You can only manage requests for your own donations.' });
         }
 
@@ -281,16 +346,23 @@ router.post('/api/donor/requests/:id/reject', isDonor, (req, res) => {
             return res.status(400).json({ error: 'This request has already been processed.' });
         }
 
-        db.prepare("UPDATE donation_requests SET status = 'REJECTED', responded_at = CURRENT_TIMESTAMP WHERE id = ?").run(requestId);
+        await db.execute({
+            sql: "UPDATE donation_requests SET status = 'REJECTED', responded_at = CURRENT_TIMESTAMP WHERE id = ?",
+            args: [requestId]
+        });
 
         // Check if there are any remaining pending requests
-        const remainingPending = db.prepare(
-            "SELECT COUNT(*) as count FROM donation_requests WHERE donation_id = ? AND status = 'PENDING'"
-        ).get(request.donation_id);
+        const remainingPending = await db.execute({
+            sql: "SELECT COUNT(*) as count FROM donation_requests WHERE donation_id = ? AND status = 'PENDING'",
+            args: [request.donation_id]
+        });
 
         // If no more pending requests, change donation status back to AVAILABLE
-        if (remainingPending.count === 0) {
-            db.prepare("UPDATE donations SET status = 'AVAILABLE', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'REQUESTED'").run(request.donation_id);
+        if (Number(remainingPending.rows[0]?.count || 0) === 0) {
+            await db.execute({
+                sql: "UPDATE donations SET status = 'AVAILABLE', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'REQUESTED'",
+                args: [request.donation_id]
+            });
         }
 
         res.json({ success: true, message: 'Request rejected.' });
@@ -301,15 +373,20 @@ router.post('/api/donor/requests/:id/reject', isDonor, (req, res) => {
 });
 
 // GET /api/donor/profile
-router.get('/api/donor/profile', isDonor, (req, res) => {
+router.get('/api/donor/profile', isDonor, async (req, res) => {
     try {
         const donorId = req.session.profileId;
-        const donor = db.prepare(`
-            SELECT d.*, u.email
-            FROM donors d
-            JOIN users u ON d.user_id = u.id
-            WHERE d.id = ?
-        `).get(donorId);
+        const result = await db.execute({
+            sql: `
+                SELECT d.*, u.email
+                FROM donors d
+                JOIN users u ON d.user_id = u.id
+                WHERE d.id = ?
+            `,
+            args: [donorId]
+        });
+
+        const donor = result.rows[0];
 
         if (!donor) {
             return res.status(404).json({ error: 'Profile not found.' });
