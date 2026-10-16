@@ -57,13 +57,15 @@
 
         let html = '<div class="table-responsive"><table><thead><tr><th>Donation</th><th>Food</th><th>Quantity</th><th>Donor</th><th>Request Status</th><th>Donation Status</th><th>Requested</th></tr></thead><tbody>';
         filtered.forEach(r => {
-            html += `<tr>
+            const isDonationExpired = r.donation_status === 'EXPIRED' || (r.pickup_deadline && new Date(r.pickup_deadline) <= new Date());
+            const donationStatus = isDonationExpired ? 'EXPIRED' : r.donation_status;
+            html += `<tr class="${isDonationExpired ? 'row-expired' : ''}">
                 <td>#${r.donation_id}</td>
-                <td>${r.food_description}</td>
+                <td><strong>${r.food_description}</strong></td>
                 <td>${r.quantity}</td>
                 <td>${r.donor_name} (${r.donor_type})</td>
                 <td>${App.statusBadge(r.status)}</td>
-                <td>${App.statusBadge(r.donation_status)}</td>
+                <td>${App.statusBadge(donationStatus)}</td>
                 <td>${App.formatDateTime(r.requested_at)}</td>
             </tr>`;
         });

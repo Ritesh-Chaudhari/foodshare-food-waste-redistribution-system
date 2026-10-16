@@ -11,11 +11,18 @@
 
     <div class="container">
         <div class="page-header">
-            <h1>Available Donations</h1>
-            <p>Browse surplus food available for collection</p>
+            <h1>Surplus Food Donations</h1>
+            <p>Browse surplus food posted by donors for collection</p>
         </div>
 
         <div id="alert" class="alert"></div>
+
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all">All Food</button>
+            <button class="filter-tab" data-filter="AVAILABLE">Available</button>
+            <button class="filter-tab" data-filter="EXPIRED">Expired</button>
+        </div>
+
         <div id="donationsList" class="loading-overlay"><span class="spinner"></span> Loading...</div>
     </div>
 
@@ -38,22 +45,36 @@
     <script src="/js/app.js"></script>
     <script src="/js/nav.js"></script>
     <script>
-    async function loadDonations() {
+    let currentFilter = 'all';
+
+    async function loadDonations(filter = 'all') {
+        currentFilter = filter;
+        const container = document.getElementById('donationsList');
+        container.className = 'loading-overlay';
+        container.innerHTML = '<span class="spinner"></span> Loading...';
+
         try {
-            const donations = await App.get('/api/ngo/available-donations');
-            const container = document.getElementById('donationsList');
+            const url = filter === 'all' ? '/api/ngo/available-donations' : `/api/ngo/available-donations?status=${filter}`;
+            const donations = await App.get(url);
+            container.className = '';
 
             if (donations.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-icon">🍽️</div><h3>No Available Donations</h3><p>There are currently no available donations. Check back later.</p></div>';
+                let msg = 'There are currently no donations in this category.';
+                if (filter === 'AVAILABLE') msg = 'There are currently no available donations. Check back later.';
+                if (filter === 'EXPIRED') msg = 'There are no expired donations at this time.';
+                container.innerHTML = `<div class="empty-state"><div class="empty-icon">🍽️</div><h3>No Donations Found</h3><p>${msg}</p></div>`;
                 return;
             }
 
             let html = '';
             donations.forEach(d => {
-                html += `<div class="donation-card">
+                const isExpired = d.status === 'EXPIRED' || (d.pickup_deadline && new Date(d.pickup_deadline) <= new Date());
+                const effectiveStatus = isExpired ? 'EXPIRED' : d.status;
+
+                html += `<div class="donation-card ${isExpired ? 'donation-card-expired' : ''}">
                     <div class="donation-card-header">
                         <h3>${d.food_description}</h3>
-                        ${App.statusBadge(d.status)}
+                        ${App.statusBadge(effectiveStatus)}
                     </div>
                     <div class="donation-card-details">
                         <div class="detail-item"><span class="detail-label">Donor:</span> ${d.donor_name} (${d.donor_type})</div>
@@ -61,17 +82,31 @@
                         <div class="detail-item"><span class="detail-label">Category:</span> ${d.food_category || 'General'}</div>
                         <div class="detail-item"><span class="detail-label">Prep Time:</span> ${d.preparation_time || '—'}</div>
                         <div class="detail-item"><span class="detail-label">Pickup Location:</span> ${d.pickup_location}</div>
-                        <div class="detail-item"><span class="detail-label">Deadline:</span> ${App.formatDateTime(d.pickup_deadline)}</div>
+                        <div class="detail-item ${isExpired ? 'text-danger' : ''}">
+                            <span class="detail-label">Deadline:</span> <strong>${App.formatDateTime(d.pickup_deadline)}</strong>
+                        </div>
                     </div>
                     ${d.additional_notes ? `<div class="text-muted" style="font-size:0.85rem; margin-bottom:0.5rem;"><strong>Notes:</strong> ${d.additional_notes}</div>` : ''}
+
+                    ${isExpired ? `
+                        <div class="alert alert-danger" style="margin: 0.5rem 0; padding: 0.45rem 0.75rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>⚠️</span> <div><strong>Food Expired:</strong> The pickup deadline has passed. This food cannot be requested.</div>
+                        </div>
+                    ` : ''}
+
                     <div class="donation-card-footer">
-                        <button class="btn btn-primary btn-sm" onclick="requestDonation(${d.id})">Request Donation</button>
+                        ${isExpired ? `
+                            <button class="btn btn-sm" disabled style="opacity: 0.65; cursor: not-allowed; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; font-weight: 600;" title="This surplus food has expired and cannot be requested">✕ Expired (Cannot Request)</button>
+                        ` : `
+                            <button class="btn btn-primary btn-sm" onclick="requestDonation(${d.id})">Request Donation</button>
+                        `}
                     </div>
                 </div>`;
             });
             container.innerHTML = html;
         } catch (err) {
-            document.getElementById('donationsList').innerHTML = '<div class="alert alert-danger show">Failed to load donations.</div>';
+            container.className = '';
+            container.innerHTML = '<div class="alert alert-danger show">Failed to load donations.</div>';
         }
     }
 
@@ -82,13 +117,22 @@
             App.hideAlert('alert');
             const result = await App.post(`/api/ngo/request-donation/${donationId}`, {});
             App.showAlert('alert', result.message, 'success');
-            loadDonations();
+            loadDonations(currentFilter);
         } catch (err) {
             App.showAlert('alert', err.message);
         }
     }
 
-    loadDonations();
+    // Tab switching
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            loadDonations(tab.dataset.filter);
+        });
+    });
+
+    loadDonations('all');
     </script>
 </body>
 </html>

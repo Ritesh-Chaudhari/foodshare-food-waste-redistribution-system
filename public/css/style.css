@@ -438,6 +438,20 @@ img { max-width: 100%; }
 .badge-approved { background: #dcfce7; color: #166534; }
 .badge-rejected { background: #fee2e2; color: #991b1b; }
 
+.donation-card-expired {
+    border-left: 4px solid #ef4444 !important;
+    background: #fffbfb;
+}
+
+.card-expired {
+    border-left: 4px solid #ef4444 !important;
+    background: #fffbfb;
+}
+
+.row-expired {
+    background: #fff8f8;
+}
+
 /* --- Tables --- */
 .table-responsive {
     overflow-x: auto;

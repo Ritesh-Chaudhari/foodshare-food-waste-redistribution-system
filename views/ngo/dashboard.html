@@ -17,6 +17,7 @@
 
         <div id="stats" class="stats-grid">
             <div class="stat-card stat-success"><div class="stat-number" id="stat-available">-</div><div class="stat-label">Available Donations</div></div>
+            <div class="stat-card stat-danger"><div class="stat-number" id="stat-expired">-</div><div class="stat-label">Expired Donations</div></div>
             <div class="stat-card stat-warning"><div class="stat-number" id="stat-pending">-</div><div class="stat-label">My Pending Requests</div></div>
             <div class="stat-card stat-info"><div class="stat-number" id="stat-confirmed">-</div><div class="stat-label">Confirmed</div></div>
             <div class="stat-card"><div class="stat-number" id="stat-collected">-</div><div class="stat-label">Collected</div></div>
@@ -52,6 +53,7 @@
         try {
             const stats = await App.get('/api/ngo/dashboard-stats');
             document.getElementById('stat-available').textContent = stats.available;
+            document.getElementById('stat-expired').textContent = stats.expired || 0;
             document.getElementById('stat-pending').textContent = stats.myPendingRequests;
             document.getElementById('stat-confirmed').textContent = stats.confirmed;
             document.getElementById('stat-collected').textContent = stats.collected || 0;
@@ -66,16 +68,17 @@
             } else {
                 let html = '';
                 donations.slice(0, 3).forEach(d => {
-                    html += `<div class="donation-card">
+                    const isExpired = d.status === 'EXPIRED' || (d.pickup_deadline && new Date(d.pickup_deadline) <= new Date());
+                    html += `<div class="donation-card ${isExpired ? 'donation-card-expired' : ''}">
                         <div class="donation-card-header">
                             <h3>${d.food_description}</h3>
-                            ${App.statusBadge(d.status)}
+                            ${App.statusBadge(isExpired ? 'EXPIRED' : d.status)}
                         </div>
                         <div class="donation-card-details">
                             <div class="detail-item"><span class="detail-label">Donor:</span> ${d.donor_name} (${d.donor_type})</div>
                             <div class="detail-item"><span class="detail-label">Quantity:</span> ${d.quantity}</div>
                             <div class="detail-item"><span class="detail-label">Pickup:</span> ${d.pickup_location}</div>
-                            <div class="detail-item"><span class="detail-label">Deadline:</span> ${App.formatDateTime(d.pickup_deadline)}</div>
+                            <div class="detail-item ${isExpired ? 'text-danger' : ''}"><span class="detail-label">Deadline:</span> ${App.formatDateTime(d.pickup_deadline)}</div>
                         </div>
                     </div>`;
                 });

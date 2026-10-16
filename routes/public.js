@@ -27,14 +27,13 @@ router.get('/for-ngos', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/pages/for-ngos.html'));
 });
 
+const { expireOverdueDonations } = require('../config/donationExpiry');
+
 // API: Public stats
 router.get('/api/public/stats', async (req, res) => {
     try {
         // Expire overdue donations first
-        await db.execute(`
-            UPDATE donations SET status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP
-            WHERE status = 'AVAILABLE' AND pickup_deadline < CURRENT_TIMESTAMP
-        `);
+        await expireOverdueDonations();
 
         const [totalDonationsRes, completedDonationsRes, totalNgosRes, totalDonorsRes] = await Promise.all([
             db.execute("SELECT COUNT(*) as count FROM donations"),

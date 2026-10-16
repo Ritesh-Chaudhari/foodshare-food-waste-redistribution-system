@@ -7,3 +7,4 @@ node_modules/
 sessions/
 .DS_Store
 Thumbs.db
+.freebuff/

@@ -69,7 +69,14 @@
             } else {
                 let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Food</th><th>Quantity</th><th>Status</th><th>Created</th></tr></thead><tbody>';
                 donations.slice(0, 5).forEach(d => {
-                    html += `<tr><td>#${d.id}</td><td>${d.food_description}</td><td>${d.quantity}</td><td>${App.statusBadge(d.status)}</td><td>${App.formatDate(d.created_at)}</td></tr>`;
+                    const isExpired = d.status === 'EXPIRED' || (d.pickup_deadline && new Date(d.pickup_deadline) <= new Date());
+                    html += `<tr class="${isExpired ? 'row-expired' : ''}">
+                        <td>#${d.id}</td>
+                        <td><strong>${d.food_description}</strong></td>
+                        <td>${d.quantity}</td>
+                        <td>${App.statusBadge(isExpired ? 'EXPIRED' : d.status)}</td>
+                        <td>${App.formatDate(d.created_at)}</td>
+                    </tr>`;
                 });
                 html += '</tbody></table></div>';
                 recentEl.innerHTML = html;

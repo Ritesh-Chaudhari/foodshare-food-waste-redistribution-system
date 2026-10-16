@@ -70,25 +70,33 @@
 
         let html = '';
         filtered.forEach(r => {
-            html += `<div class="card">
+            const isDonationExpired = r.donation_status === 'EXPIRED' || (r.pickup_deadline && new Date(r.pickup_deadline) <= new Date());
+            html += `<div class="card ${isDonationExpired ? 'card-expired' : ''}">
                 <div class="flex justify-between items-center flex-wrap gap-1 mb-1">
                     <div>
                         <strong>Donation #${r.donation_id}</strong> — ${r.food_description} (${r.quantity})
                     </div>
-                    ${App.statusBadge(r.status)}
+                    <div class="flex gap-1 items-center">
+                        ${isDonationExpired ? '<span class="badge badge-expired">FOOD EXPIRED</span>' : ''}
+                        ${App.statusBadge(r.status)}
+                    </div>
                 </div>
                 <div class="text-muted" style="font-size:0.85rem;">
                     <strong>NGO:</strong> ${r.ngo_name} &nbsp;|&nbsp;
                     <strong>Contact:</strong> ${r.contact_person} &nbsp;|&nbsp;
                     <strong>Phone:</strong> ${r.ngo_phone} &nbsp;|&nbsp;
-                    <strong>Requested:</strong> ${App.formatDateTime(r.requested_at)}
+                    <strong>Requested:</strong> ${App.formatDateTime(r.requested_at)} &nbsp;|&nbsp;
+                    <span class="${isDonationExpired ? 'text-danger font-semibold' : ''}"><strong>Deadline:</strong> ${App.formatDateTime(r.pickup_deadline)}</span>
                 </div>
-                <div class="mt-1 flex gap-1 flex-wrap">
+                <div class="mt-1 flex gap-1 flex-wrap items-center">
                     <button class="btn btn-outline btn-sm" onclick="viewNgo(${JSON.stringify(r).replace(/"/g, '&quot;')})">View NGO Details</button>
-                    ${r.status === 'PENDING' ? `
+                    ${isDonationExpired ? `
+                        <span class="badge badge-expired" style="padding:0.35rem 0.6rem;">Donation Expired (Cannot Accept)</span>
+                        ${r.status === 'PENDING' ? `<button class="btn btn-danger btn-sm" onclick="rejectRequest(${r.id})">Close Request</button>` : ''}
+                    ` : (r.status === 'PENDING' ? `
                         <button class="btn btn-success btn-sm" onclick="acceptRequest(${r.id})">Accept</button>
                         <button class="btn btn-danger btn-sm" onclick="rejectRequest(${r.id})">Reject</button>
-                    ` : ''}
+                    ` : '')}
                 </div>
             </div>`;
         });

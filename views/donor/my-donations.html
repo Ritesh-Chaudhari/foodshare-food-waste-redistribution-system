@@ -41,13 +41,15 @@
 
     async function loadDonations(filter = 'all') {
         try {
-            if (allDonations.length === 0) {
-                allDonations = await App.get('/api/donor/donations');
-            }
+            allDonations = await App.get('/api/donor/donations');
 
             let filtered = allDonations;
             if (filter !== 'all') {
-                filtered = allDonations.filter(d => d.status === filter);
+                filtered = allDonations.filter(d => {
+                    const isExpired = d.status === 'EXPIRED' || (d.pickup_deadline && new Date(d.pickup_deadline) <= new Date());
+                    if (filter === 'EXPIRED') return isExpired;
+                    return d.status === filter && !isExpired;
+                });
             }
 
             const container = document.getElementById('donationsList');
@@ -58,13 +60,18 @@
 
             let html = '<div class="table-responsive"><table><thead><tr><th>ID</th><th>Food Description</th><th>Quantity</th><th>Pickup Location</th><th>Pickup Deadline</th><th>Status</th><th>Created</th></tr></thead><tbody>';
             filtered.forEach(d => {
-                html += `<tr>
+                const isExpired = d.status === 'EXPIRED' || (d.pickup_deadline && new Date(d.pickup_deadline) <= new Date());
+                const effectiveStatus = isExpired ? 'EXPIRED' : d.status;
+                html += `<tr class="${isExpired ? 'row-expired' : ''}">
                     <td>#${d.id}</td>
-                    <td>${d.food_description}</td>
+                    <td><strong>${d.food_description}</strong></td>
                     <td>${d.quantity}</td>
                     <td>${d.pickup_location}</td>
-                    <td>${App.formatDateTime(d.pickup_deadline)}</td>
-                    <td>${App.statusBadge(d.status)}</td>
+                    <td class="${isExpired ? 'text-danger' : ''}">
+                        ${App.formatDateTime(d.pickup_deadline)}
+                        ${isExpired ? '<br><small style="font-weight:600;">(Deadline Passed)</small>' : ''}
+                    </td>
+                    <td>${App.statusBadge(effectiveStatus)}</td>
                     <td>${App.formatDate(d.created_at)}</td>
                 </tr>`;
             });

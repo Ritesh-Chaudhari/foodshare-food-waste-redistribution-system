@@ -6,6 +6,7 @@ const path = require('path');
 
 // Initialize database (runs schema creation in Turso)
 const db = require('./config/database');
+const { expireOverdueDonations } = require('./config/donationExpiry');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -83,6 +84,10 @@ app.listen(PORT, () => {
     console.log(`========================================\n`);
     console.log(`Admin Login: ${process.env.ADMIN_EMAIL || 'admin@foodshare.com'} / ${process.env.ADMIN_PASSWORD || 'admin123'}`);
     console.log(`City: ${process.env.CITY || 'Shirpur'}\n`);
+
+    // Run expiration check on startup and periodically every 30 seconds
+    expireOverdueDonations();
+    setInterval(expireOverdueDonations, 30000);
 });
 
 module.exports = app;

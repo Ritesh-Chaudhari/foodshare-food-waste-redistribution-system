@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../config/database');
+const { expireOverdueDonations } = require('../config/donationExpiry');
 const { CITY } = require('../config/city');
 const { isDonor, isAuthenticated } = require('../config/middleware');
 
@@ -50,6 +51,7 @@ router.get('/donor/rejected', isDonor, (req, res) => {
 // GET /api/donor/dashboard-stats
 router.get('/api/donor/dashboard-stats', isDonor, async (req, res) => {
     try {
+        await expireOverdueDonations();
         const donorId = req.session.profileId;
 
         const [activeRes, pendingRes, confirmedRes, collectedRes, completedRes, expiredRes, totalRes] = await Promise.all([
@@ -141,6 +143,10 @@ router.post('/api/donor/donations', isDonor, async (req, res) => {
             return res.status(400).json({ error: 'Please enter a valid pickup deadline.' });
         }
 
+        if (deadline <= new Date()) {
+            return res.status(400).json({ error: 'Pickup deadline must be a future date and time.' });
+        }
+
         const fullPickupLocation = pickupLocation;
 
         const result = await db.execute({
@@ -174,6 +180,7 @@ router.post('/api/donor/donations', isDonor, async (req, res) => {
 // GET /api/donor/donations
 router.get('/api/donor/donations', isDonor, async (req, res) => {
     try {
+        await expireOverdueDonations();
         const donorId = req.session.profileId;
         const status = req.query.status;
 
@@ -214,6 +221,7 @@ router.get('/api/donor/donations', isDonor, async (req, res) => {
 // GET /api/donor/donations/:id
 router.get('/api/donor/donations/:id', isDonor, async (req, res) => {
     try {
+        await expireOverdueDonations();
         const donorId = req.session.profileId;
         const result = await db.execute({
             sql: 'SELECT * FROM donations WHERE id = ? AND donor_id = ?',
@@ -236,6 +244,7 @@ router.get('/api/donor/donations/:id', isDonor, async (req, res) => {
 // GET /api/donor/requests - get all requests for donor's donations
 router.get('/api/donor/requests', isDonor, async (req, res) => {
     try {
+        await expireOverdueDonations();
         const donorId = req.session.profileId;
 
         const result = await db.execute({
@@ -261,13 +270,14 @@ router.get('/api/donor/requests', isDonor, async (req, res) => {
 // POST /api/donor/requests/:id/accept
 router.post('/api/donor/requests/:id/accept', isDonor, async (req, res) => {
     try {
+        await expireOverdueDonations();
         const donorId = req.session.profileId;
         const requestId = req.params.id;
 
         // Get the request with donation info
         const result = await db.execute({
             sql: `
-                SELECT dr.*, d.donor_id, d.status as donation_status
+                SELECT dr.*, d.donor_id, d.status as donation_status, d.pickup_deadline
                 FROM donation_requests dr
                 JOIN donations d ON dr.donation_id = d.id
                 WHERE dr.id = ?
@@ -283,6 +293,10 @@ router.post('/api/donor/requests/:id/accept', isDonor, async (req, res) => {
 
         if (Number(request.donor_id) !== Number(donorId)) {
             return res.status(403).json({ error: 'You can only manage requests for your own donations.' });
+        }
+
+        if (request.donation_status === 'EXPIRED' || (request.pickup_deadline && new Date(request.pickup_deadline) <= new Date())) {
+            return res.status(400).json({ error: 'This donation has expired and requests can no longer be accepted.' });
         }
 
         if (request.donation_status !== 'AVAILABLE' && request.donation_status !== 'REQUESTED') {

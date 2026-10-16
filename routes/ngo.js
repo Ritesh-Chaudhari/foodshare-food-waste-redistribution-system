@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../config/database');
+const { expireOverdueDonations } = require('../config/donationExpiry');
 const { CITY } = require('../config/city');
 const { isNgo, isAuthenticated } = require('../config/middleware');
 
@@ -41,21 +42,13 @@ router.get('/ngo/rejected', isNgo, (req, res) => {
 
 // --- API Routes ---
 
-// Helper: expire overdue available donations
-async function expireOverdueDonations() {
-    await db.execute(`
-        UPDATE donations SET status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP
-        WHERE status = 'AVAILABLE' AND pickup_deadline < CURRENT_TIMESTAMP
-    `);
-}
-
 // GET /api/ngo/dashboard-stats
 router.get('/api/ngo/dashboard-stats', isNgo, async (req, res) => {
     try {
         await expireOverdueDonations();
         const ngoId = req.session.profileId;
 
-        const [availableRes, pendingRes, confirmedRes, collectedRes, completedRes, totalRes] = await Promise.all([
+        const [availableRes, pendingRes, confirmedRes, collectedRes, completedRes, expiredRes, totalRes] = await Promise.all([
             db.execute("SELECT COUNT(*) as count FROM donations WHERE status = 'AVAILABLE'"),
             db.execute({
                 sql: `
@@ -76,6 +69,7 @@ router.get('/api/ngo/dashboard-stats', isNgo, async (req, res) => {
                 sql: "SELECT COUNT(*) as count FROM donations WHERE confirmed_ngo_id = ? AND status IN ('COMPLETED', 'COLLECTED')",
                 args: [ngoId]
             }),
+            db.execute("SELECT COUNT(*) as count FROM donations WHERE status = 'EXPIRED'"),
             db.execute({
                 sql: "SELECT COUNT(*) as count FROM donation_requests WHERE ngo_id = ?",
                 args: [ngoId]
@@ -88,6 +82,7 @@ router.get('/api/ngo/dashboard-stats', isNgo, async (req, res) => {
             confirmed: Number(confirmedRes.rows[0]?.count || 0),
             collected: Number(collectedRes.rows[0]?.count || 0),
             completed: Number(completedRes.rows[0]?.count || 0),
+            expired: Number(expiredRes.rows[0]?.count || 0),
             totalMyRequests: Number(totalRes.rows[0]?.count || 0)
         };
 
@@ -102,15 +97,31 @@ router.get('/api/ngo/dashboard-stats', isNgo, async (req, res) => {
 router.get('/api/ngo/available-donations', isNgo, async (req, res) => {
     try {
         await expireOverdueDonations();
+        const status = req.query.status;
 
-        const result = await db.execute(`
+        let query = `
             SELECT d.*, dorg.organization_name as donor_name, dorg.organization_type as donor_type,
                    (SELECT COUNT(*) FROM donation_requests WHERE donation_id = d.id AND status = 'PENDING') as pending_requests
             FROM donations d
             JOIN donors dorg ON d.donor_id = dorg.id
-            WHERE d.status = 'AVAILABLE'
-            ORDER BY d.pickup_deadline ASC
-        `);
+        `;
+        const params = [];
+
+        if (status === 'AVAILABLE') {
+            query += " WHERE d.status = 'AVAILABLE'";
+        } else if (status === 'EXPIRED') {
+            query += " WHERE d.status = 'EXPIRED'";
+        } else {
+            // Default or 'all': return both AVAILABLE and EXPIRED so NGO sees surplus food and their status
+            query += " WHERE d.status IN ('AVAILABLE', 'EXPIRED')";
+        }
+
+        query += " ORDER BY CASE WHEN d.status = 'AVAILABLE' THEN 0 ELSE 1 END, d.pickup_deadline ASC";
+
+        const result = await db.execute({
+            sql: query,
+            args: params
+        });
 
         res.json(result.rows);
     } catch (err) {
@@ -185,17 +196,13 @@ router.post('/api/ngo/request-donation/:id', isNgo, async (req, res) => {
             return res.status(404).json({ error: 'Donation not found.' });
         }
 
-        if (donation.status !== 'AVAILABLE') {
-            return res.status(400).json({ error: 'This donation is no longer available.' });
+        if (donation.status === 'EXPIRED' || (donation.pickup_deadline && new Date(donation.pickup_deadline) <= new Date())) {
+            await expireOverdueDonations();
+            return res.status(400).json({ error: 'This surplus food has expired and cannot be requested.' });
         }
 
-        // Check if deadline has passed
-        if (new Date(donation.pickup_deadline) < new Date()) {
-            await db.execute({
-                sql: "UPDATE donations SET status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                args: [donationId]
-            });
-            return res.status(400).json({ error: 'This donation has expired.' });
+        if (donation.status !== 'AVAILABLE') {
+            return res.status(400).json({ error: 'This donation is no longer available.' });
         }
 
         // Check for duplicate request
@@ -230,6 +237,7 @@ router.post('/api/ngo/request-donation/:id', isNgo, async (req, res) => {
 // GET /api/ngo/my-requests
 router.get('/api/ngo/my-requests', isNgo, async (req, res) => {
     try {
+        await expireOverdueDonations();
         const ngoId = req.session.profileId;
 
         const result = await db.execute({

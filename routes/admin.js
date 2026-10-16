@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../config/database');
+const { expireOverdueDonations } = require('../config/donationExpiry');
 const { isAdmin } = require('../config/middleware');
 
 const router = express.Router();
@@ -43,6 +44,7 @@ router.get('/admin/reports', isAdmin, (req, res) => {
 // GET /api/admin/dashboard-stats
 router.get('/api/admin/dashboard-stats', isAdmin, async (req, res) => {
     try {
+        await expireOverdueDonations();
         const [
             totalDonorsRes,
             pendingDonorsRes,
@@ -389,6 +391,7 @@ router.post('/api/admin/ngos/:id/toggle-active', isAdmin, async (req, res) => {
 // GET /api/admin/donations
 router.get('/api/admin/donations', isAdmin, async (req, res) => {
     try {
+        await expireOverdueDonations();
         const status = req.query.status;
         let query = `
             SELECT d.*, dorg.organization_name as donor_name, dorg.organization_type as donor_type,
@@ -492,6 +495,7 @@ router.get('/api/admin/requests', isAdmin, async (req, res) => {
 // GET /api/admin/reports
 router.get('/api/admin/reports', isAdmin, async (req, res) => {
     try {
+        await expireOverdueDonations();
         const [
             donorsByTypeRes,
             donationsByStatusRes,
